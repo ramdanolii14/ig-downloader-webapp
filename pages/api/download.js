@@ -6,6 +6,12 @@ function extractShortcode(url) {
   return match ? match[1] : null;
 }
 
+function sanitizeUsername(name) {
+  if (!name || typeof name !== 'string') return null;
+  const cleaned = name.trim().replace(/[^a-zA-Z0-9._-]/g, '');
+  return cleaned.length > 0 ? cleaned : null;
+}
+
 function buildMediaList(media) {
   if (!media) return [];
 
@@ -65,7 +71,14 @@ async function fetchFromRapidApi(shortcode) {
     })
     .filter(Boolean);
 
-  return items.length > 0 ? items : null;
+  if (items.length === 0) return null;
+
+  const first = json[0] || {};
+  const username = sanitizeUsername(
+    first.owner?.username || first.username || first.author?.username || null
+  );
+
+  return { username, items };
 }
 
 async function fetchFromSocialKit(url) {
@@ -100,7 +113,11 @@ async function fetchFromSocialKit(url) {
 
   if (!json.success || !json.data || !json.data.downloadUrl) return null;
 
-  return [{ type: 'video', mediaUrl: json.data.downloadUrl }];
+  const username = sanitizeUsername(
+    json.data.username || json.data.author?.username || json.data.uploader || null
+  );
+
+  return { username, items: [{ type: 'video', mediaUrl: json.data.downloadUrl }] };
 }
 
 async function fetchFromGraphql(shortcode) {
@@ -140,7 +157,12 @@ async function fetchFromGraphql(shortcode) {
   const media = json?.data?.xdt_shortcode_media;
   if (!media) return null;
 
-  return buildMediaList(media);
+  const items = buildMediaList(media);
+  if (items.length === 0) return null;
+
+  const username = sanitizeUsername(media.owner?.username);
+
+  return { username, items };
 }
 
 async function fetchFromMagicParams(shortcode) {
@@ -177,8 +199,10 @@ async function fetchFromMagicParams(shortcode) {
   const item = json?.items?.[0];
   if (!item) return null;
 
+  const username = sanitizeUsername(item.user?.username);
+
   if (item.product_type === 'carousel_container' && item.carousel_media) {
-    return item.carousel_media
+    const items = item.carousel_media
       .map((m) => {
         if (m.video_versions && m.video_versions.length > 0) {
           return { type: 'video', mediaUrl: m.video_versions[0].url };
@@ -187,14 +211,15 @@ async function fetchFromMagicParams(shortcode) {
         return best ? { type: 'image', mediaUrl: best.url } : null;
       })
       .filter(Boolean);
+    return items.length > 0 ? { username, items } : null;
   }
 
   if (item.video_versions && item.video_versions.length > 0) {
-    return [{ type: 'video', mediaUrl: item.video_versions[0].url }];
+    return { username, items: [{ type: 'video', mediaUrl: item.video_versions[0].url }] };
   }
 
   const best = item.image_versions2 && item.image_versions2.candidates && item.image_versions2.candidates[0];
-  return best ? [{ type: 'image', mediaUrl: best.url }] : null;
+  return best ? { username, items: [{ type: 'image', mediaUrl: best.url }] } : null;
 }
 
 export default async function handler(req, res) {
@@ -220,25 +245,31 @@ export default async function handler(req, res) {
   console.log('[handler] sessionid set:', Boolean(process.env.INSTAGRAM_SESSIONID));
 
   try {
-    let items = await fetchFromRapidApi(shortcode);
+    let result = await fetchFromRapidApi(shortcode);
 
-    if (!items || items.length === 0) {
-      items = await fetchFromSocialKit(url);
+    if (!result || !result.items || result.items.length === 0) {
+      result = await fetchFromSocialKit(url);
     }
 
-    if (!items || items.length === 0) {
-      items = await fetchFromGraphql(shortcode);
+    if (!result || !result.items || result.items.length === 0) {
+      result = await fetchFromGraphql(shortcode);
     }
 
-    if (!items || items.length === 0) {
-      items = await fetchFromMagicParams(shortcode);
+    if (!result || !result.items || result.items.length === 0) {
+      result = await fetchFromMagicParams(shortcode);
     }
 
-    if (!items || items.length === 0) {
+    if (!result || !result.items || result.items.length === 0) {
       return res.status(404).json({
         error: 'Media tidak ditemukan. Cek log terminal untuk detail penyebabnya'
       });
     }
+
+    const baseName = result.username || 'instagram';
+    const items = result.items.map((item, index) => ({
+      ...item,
+      filename: index === 0 ? baseName : `${baseName} (${index})`
+    }));
 
     return res.status(200).json({ items });
   } catch (err) {

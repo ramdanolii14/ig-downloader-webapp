@@ -2,9 +2,16 @@ export const config = {
   runtime: 'edge'
 };
 
+function sanitizeFilename(name) {
+  if (!name || typeof name !== 'string') return null;
+  const cleaned = name.trim().replace(/[\\/:*?"<>|]/g, '');
+  return cleaned.length > 0 ? cleaned : null;
+}
+
 export default async function handler(req) {
   const { searchParams } = new URL(req.url);
   const url = searchParams.get('url');
+  const name = sanitizeFilename(searchParams.get('name')) || 'instagram-media';
 
   if (!url) {
     return new Response('URL tidak ada', { status: 400 });
@@ -27,7 +34,7 @@ export default async function handler(req) {
       status: 200,
       headers: {
         'Content-Type': contentType,
-        'Content-Disposition': `attachment; filename="instagram-media.${extension}"`
+        'Content-Disposition': `attachment; filename="${name}.${extension}"`
       }
     });
   } catch (err) {
