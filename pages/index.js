@@ -4,89 +4,89 @@ import Head from 'next/head';
 const FEATURES = [
   {
     tag: '[format]',
-    title: 'Semua jenis konten',
-    body: 'Unduh foto tunggal, video, Reels, IGTV, dan carousel banyak slide dari satu kotak input yang sama.'
+    title: 'All formats supported',
+    body: 'Download photos, videos, reels, IGTV, and carousels from public Instagram posts. All content types are supported as long as the post is public.'
   },
   {
-    tag: '[kualitas]',
-    title: 'Resolusi asli',
-    body: 'File diambil langsung dari sumbernya, jadi ukuran dan kualitasnya sama seperti yang diunggah pemilik akun.'
+    tag: '[resolution]',
+    title: 'Original resolution',
+    body: 'Files are fetched directly from the source, so their size and quality match what was uploaded by the account owner.'
   },
   {
-    tag: '[kecepatan]',
-    title: 'Tanpa antre',
-    body: 'Prosesnya jalan di server, bukan di HP kamu, jadi tidak membebani baterai atau kuota saat menunggu.'
+    tag: '[speed]',
+    title: 'No waiting',
+    body: 'The process runs on the server, not on your phone, so it doesn\'t drain your battery or use your data while waiting.'
   },
   {
-    tag: '[akun]',
-    title: 'Tanpa login instagram',
-    body: 'Cukup tempel link publiknya. Tidak perlu memasukkan username atau kata sandi akun instagram kamu.'
+    tag: '[account]',
+    title: 'No Instagram login required',
+    body: 'Just paste the public link. You don\'t need to enter your Instagram username or password.'
   },
   {
-    tag: '[tanda air]',
-    title: 'Tanpa watermark tambahan',
-    body: 'File yang tersimpan persis seperti aslinya, tidak ditempeli logo atau tautan balik ke situs manapun.'
+    tag: '[watermark]',
+    title: 'No additional watermarks',
+    body: 'The saved files are identical to the originals, without any logos or backlinks to any website.'
   },
   {
-    tag: '[perangkat]',
-    title: 'Jalan di HP dan komputer',
-    body: 'Halaman ini responsif penuh, dipakai lewat browser HP, tablet, atau laptop tanpa pasang aplikasi apapun.'
+    tag: '[devices]',
+    title: 'Works on phones and computers',
+    body: 'This page is fully responsive, usable via the browser on smartphones, tablets, or laptops without installing any applications.'
   }
 ];
 
 const STEPS = [
   {
     number: '01',
-    title: 'Salin link postingan',
-    body: 'Buka instagram, cari postingan publik yang ingin disimpan, ketuk titik tiga lalu pilih salin link.'
+    title: 'Copy the public post link',
+    body: 'Open the instagram app or website, find the public post you want to download, and copy its link.'
   },
   {
     number: '02',
-    title: 'Tempel di kotak input',
-    body: 'Kembali ke halaman ini, tempel link tadi ke kotak input di bagian atas halaman.'
+    title: 'Paste in the input box',
+    body: 'Return to this page, paste the link into the input box at the top of the page.'
   },
   {
     number: '03',
-    title: 'Tekan tombol unduh',
-    body: 'Sistem akan mengambil data media dari postingan tersebut dan menampilkan pratinjaunya di layar.'
+    title: 'Press the download button',
+    body: 'The system will fetch the media data from the post and display a preview on the screen.'
   },
   {
     number: '04',
-    title: 'Simpan tiap file',
-    body: 'Klik simpan file pada tiap hasil untuk mengunduhnya satu per satu ke perangkat kamu.'
+    title: 'Save each file',
+    body: 'Click the save file option for each result to download them one by one to your device.'
   }
 ];
 
-const FORMATS = ['Foto tunggal', 'Carousel banyak foto', 'Video feed', 'Reels', 'IGTV', 'Foto profil publik'];
+const FORMATS = ['Single Photo', 'Multi-Photo Carousel', 'Video Feed', 'Reels', 'IGTV', 'Public Profile Photo'];
 
 const FAQS = [
   {
-    q: 'Apakah alat ini gratis digunakan?',
-    a: 'Ya. Halaman ini tidak memungut biaya apapun untuk mengunduh foto atau video dari postingan publik instagram.'
+    q: 'Is this tool free to use?',
+    a: 'Yes. This page does not charge any fees for downloading photos or videos from public Instagram posts.'
   },
   {
-    q: 'Apakah saya perlu login ke akun instagram?',
-    a: 'Tidak. Kamu hanya perlu menempelkan link postingan publik. Tidak ada kolom username atau kata sandi di halaman ini.'
+    q: 'Do I need to log in to my Instagram account?',
+    a: 'No. You only need to paste the link of the public post. There are no username or password fields on this page.'
   },
   {
-    q: 'Apakah bisa mengunduh dari akun privat?',
-    a: 'Tidak. Alat ini hanya bekerja untuk postingan yang bersifat publik, sesuai dengan pengaturan privasi yang dipilih pemilik akun.'
+    q: 'Can I download from private accounts?',
+    a: 'No. This tool only works for public posts, according to the privacy settings chosen by the account owner.'
   },
   {
-    q: 'Kenapa link yang saya tempel kadang tidak ditemukan?',
-    a: 'Beberapa kemungkinan penyebabnya, postingan sudah dihapus, akun diubah menjadi privat, atau link yang ditempel tidak lengkap.'
+    q: 'Why does the link I paste sometimes not work?',
+    a: 'There are several possible reasons: the post has been deleted, the account has been changed to private, or the pasted link is incomplete.'
   },
   {
-    q: 'Apakah file yang diunduh ada tanda air atau logo tambahan?',
-    a: 'Tidak. File yang kamu simpan persis sama seperti yang diunggah pemilik akun, tanpa logo atau watermark tambahan.'
+    q: 'Does the downloaded file have a watermark or additional logo?',
+    a: 'No. The files you save are identical to those uploaded by the account owner, without any logos or watermarks.'
   },
   {
-    q: 'Bisakah mengunduh beberapa foto sekaligus dari satu carousel?',
-    a: 'Bisa. Kalau postingan berisi beberapa foto atau video dalam satu carousel, semuanya akan ditampilkan dan bisa disimpan satu per satu.'
+    q: 'Can I download multiple photos at once from a carousel?',
+    a: 'Yes. If the post contains multiple photos or videos in a single carousel, all of them will be displayed and can be saved one by one.'
   },
   {
-    q: 'Apakah halaman ini bisa dipakai lewat HP?',
-    a: 'Bisa. Tampilan halaman ini menyesuaikan otomatis baik dibuka lewat HP, tablet, maupun komputer.'
+    q: 'Can this page be used on mobile devices?',
+    a: 'Yes. The page layout automatically adjusts for mobile, tablet, and desktop browsers.'
   }
 ];
 
@@ -126,17 +126,17 @@ export default function Home() {
   return (
     <>
       <Head>
-        <title>Instagram Downloader - Simpan Foto, Video, dan Reels Instagram Gratis</title>
+        <title>Instagram Downloader - Save Photos, Videos, and Reels Instagram for Free</title>
         <meta
           name="description"
-          content="Unduh foto, video, reels, IGTV, dan carousel dari postingan publik instagram secara gratis. Tanpa login, tanpa watermark, langsung dari browser HP atau komputer."
+          content="Download photos, videos, reels, IGTV, and carousels from public Instagram posts for free. No login, no watermark, directly from your mobile or desktop browser."
         />
         <meta
           name="keywords"
-          content="instagram downloader, download foto instagram, download video instagram, download reels instagram, download igtv, unduh instagram gratis"
+          content="instagram downloader, download instagram photos, download instagram videos, download instagram reels, download igtv, free instagram downloader"
         />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta property="og:title" content="Instagram Downloader - Simpan Foto, Video, dan Reels Instagram" />
+        <meta property="og:title" content="Instagram Downloader - Save Photos, Videos, and Reels Instagram" />
         <meta
           property="og:description"
           content="Tempel link postingan publik instagram, dapatkan file foto atau video aslinya dalam hitungan detik."
@@ -154,11 +154,11 @@ export default function Home() {
         <header className="topbar">
           <span className="brand">
             <span className="brand-mark" aria-hidden="true" />
-            IG SIMPAN
+            INSTAGRAM DOWNLOADER
           </span>
           <nav className="topnav" aria-label="Navigasi halaman">
-            <a href="#cara-pakai">Cara pakai</a>
-            <a href="#fitur">Fitur</a>
+            <a href="#cara-pakai">How to Use</a>
+            <a href="#fitur">Features</a>
             <a href="#faq">FAQ</a>
           </nav>
         </header>
@@ -171,16 +171,15 @@ export default function Home() {
             <span className="corner corner-br" />
           </div>
 
-          <p className="eyebrow">frame 001 / unduh media publik</p>
-          <h1 id="hero-heading">Simpan foto dan video instagram dalam beberapa detik</h1>
+          <p className="eyebrow">frame 001 / Download Public Media</p>
+          <h1 id="hero-heading">save photos and videos from instagram for free</h1>
           <p className="hero-sub">
-            Tempel link postingan, reels, atau igtv publik di bawah ini. Sistem akan mengambil file
-            aslinya langsung dari sumbernya, tanpa perlu login dan tanpa memasang aplikasi apapun.
+            Paste the link of a public instagram post and get the original media files in seconds. No login, no watermark, works on mobile and desktop browsers.
           </p>
 
           <form onSubmit={handleSubmit} className="download-form">
             <label htmlFor="ig-url" className="sr-only">
-              Link postingan instagram
+              Link
             </label>
             <input
               id="ig-url"
@@ -191,7 +190,7 @@ export default function Home() {
               required
             />
             <button type="submit" disabled={loading}>
-              {loading ? 'Memproses...' : 'Unduh sekarang'}
+              {loading ? 'Downloading...' : 'Download'}
             </button>
           </form>
 
@@ -216,7 +215,7 @@ export default function Home() {
                   ) : (
                     <img src={item.mediaUrl} alt={`Media instagram nomor ${index + 1}`} />
                   )}
-                  <a href={`/api/proxy?url=${encodeURIComponent(item.mediaUrl)}`}>Simpan file</a>
+                  <a href={`/api/proxy?url=${encodeURIComponent(item.mediaUrl)}`}>Save File</a>
                 </article>
               ))}
             </div>
@@ -224,8 +223,8 @@ export default function Home() {
         )}
 
         <section className="how-to" id="cara-pakai" aria-labelledby="how-to-heading">
-          <p className="eyebrow">frame 002 / panduan</p>
-          <h2 id="how-to-heading">Cara memakai alat ini</h2>
+          <p className="eyebrow">frame 002 / guide</p>
+          <h2 id="how-to-heading">How to Use This Tool</h2>
           <ol className="steps">
             {STEPS.map((step) => (
               <li className="step" key={step.number}>
@@ -240,8 +239,8 @@ export default function Home() {
         </section>
 
         <section className="features" id="fitur" aria-labelledby="features-heading">
-          <p className="eyebrow">frame 003 / kelebihan</p>
-          <h2 id="features-heading">Kenapa memakai halaman ini</h2>
+          <p className="eyebrow">frame 003 / benefits</p>
+          <h2 id="features-heading">Why Use This Page</h2>
           <div className="feature-grid">
             {FEATURES.map((feature) => (
               <div className="feature-card" key={feature.title}>
@@ -254,11 +253,11 @@ export default function Home() {
         </section>
 
         <section className="formats" aria-labelledby="formats-heading">
-          <p className="eyebrow">frame 004 / jenis konten</p>
-          <h2 id="formats-heading">Jenis konten yang didukung</h2>
+          <p className="eyebrow">frame 004 / content types</p>
+          <h2 id="formats-heading">Supported Content Types</h2>
           <p className="formats-intro">
-            Selama postingan bersifat publik, halaman ini bisa membaca dan menyiapkan file dari
-            berbagai jenis konten instagram berikut.
+            As long as the post is public, this page can read and prepare files from
+            the following types of instagram content.
           </p>
           <ul className="format-list">
             {FORMATS.map((format) => (
@@ -268,8 +267,8 @@ export default function Home() {
         </section>
 
         <section className="faq" id="faq" aria-labelledby="faq-heading">
-          <p className="eyebrow">frame 005 / pertanyaan umum</p>
-          <h2 id="faq-heading">Pertanyaan yang sering ditanyakan</h2>
+          <p className="eyebrow">frame 005 / frequently asked questions</p>
+          <h2 id="faq-heading">Frequently Asked Questions</h2>
           <div className="faq-list">
             {FAQS.map((item) => (
               <details className="faq-item" key={item.q}>
@@ -282,13 +281,10 @@ export default function Home() {
 
         <footer className="footer">
           <p>
-            Halaman ini adalah alat pihak ketiga yang independen dan tidak berafiliasi, disponsori,
-            atau didukung secara resmi oleh instagram maupun meta platforms inc. Semua nama merek
-            adalah milik pemegang haknya masing masing.
+            This is an independent third-party tool and is not affiliated with, sponsored by, or endorsed by Instagram or Meta Platforms Inc. All brand names are the property of their respective owners.
           </p>
           <p>
-            Gunakan alat ini sewajarnya. Hormati hak cipta pemilik konten dan jangan menyebarkan
-            ulang materi yang diunduh tanpa izin dari pembuat aslinya.
+            Use this tool responsibly. Respect the copyright of content creators and do not redistribute downloaded material without permission from the original creators.
           </p>
         </footer>
       </main>
