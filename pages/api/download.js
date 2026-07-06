@@ -25,6 +25,49 @@ function buildMediaList(media) {
   ];
 }
 
+async function fetchFromRapidApi(shortcode) {
+  if (!process.env.RAPIDAPI_KEY) {
+    console.log('[fetchFromRapidApi] skipped, no key set');
+    return null;
+  }
+
+  const response = await fetch('https://instagram120.p.rapidapi.com/api/instagram/mediaByShortcode', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-rapidapi-host': 'instagram120.p.rapidapi.com',
+      'x-rapidapi-key': process.env.RAPIDAPI_KEY
+    },
+    body: JSON.stringify({ shortcode })
+  });
+
+  const text = await response.text();
+  console.log('[fetchFromRapidApi] status:', response.status);
+  console.log('[fetchFromRapidApi] body preview:', text.slice(0, 300));
+
+  if (!response.ok) return null;
+
+  let json;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    return null;
+  }
+
+  if (!Array.isArray(json) || json.length === 0) return null;
+
+  const items = json
+    .map((item) => {
+      const media = item.urls && item.urls[0];
+      if (!media || !media.url) return null;
+      const isVideo = media.extension === 'mp4';
+      return { type: isVideo ? 'video' : 'image', mediaUrl: media.url };
+    })
+    .filter(Boolean);
+
+  return items.length > 0 ? items : null;
+}
+
 async function fetchFromSocialKit(url) {
   if (!process.env.SOCIALKIT_ACCESS_KEY) {
     console.log('[fetchFromSocialKit] skipped, no access key set');
@@ -172,11 +215,16 @@ export default async function handler(req, res) {
   }
 
   console.log('[handler] shortcode:', shortcode);
+  console.log('[handler] rapidapi key set:', Boolean(process.env.RAPIDAPI_KEY));
   console.log('[handler] socialkit key set:', Boolean(process.env.SOCIALKIT_ACCESS_KEY));
   console.log('[handler] sessionid set:', Boolean(process.env.INSTAGRAM_SESSIONID));
 
   try {
-    let items = await fetchFromSocialKit(url);
+    let items = await fetchFromRapidApi(shortcode);
+
+    if (!items || items.length === 0) {
+      items = await fetchFromSocialKit(url);
+    }
 
     if (!items || items.length === 0) {
       items = await fetchFromGraphql(shortcode);

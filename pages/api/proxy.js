@@ -1,25 +1,36 @@
-export default async function handler(req, res) {
-  const { url } = req.query;
+export const config = {
+  runtime: 'edge'
+};
+
+export default async function handler(req) {
+  const { searchParams } = new URL(req.url);
+  const url = searchParams.get('url');
 
   if (!url) {
-    return res.status(400).send('URL tidak ada');
+    return new Response('URL tidak ada', { status: 400 });
   }
 
   try {
     const response = await fetch(url);
 
-    if (!response.ok) {
-      return res.status(400).send('Gagal mengambil media');
+    if (!response.ok || !response.body) {
+      return new Response('Gagal mengambil media', { status: 400 });
     }
 
     const contentType = response.headers.get('content-type') || 'application/octet-stream';
-    const extension = contentType.includes('video') ? 'mp4' : 'jpg';
-    const arrayBuffer = await response.arrayBuffer();
+    let extension = 'jpg';
+    if (contentType.includes('video')) extension = 'mp4';
+    else if (contentType.includes('webp')) extension = 'webp';
+    else if (contentType.includes('png')) extension = 'png';
 
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Content-Disposition', `attachment; filename="instagram-media.${extension}"`);
-    res.send(Buffer.from(arrayBuffer));
+    return new Response(response.body, {
+      status: 200,
+      headers: {
+        'Content-Type': contentType,
+        'Content-Disposition': `attachment; filename="instagram-media.${extension}"`
+      }
+    });
   } catch (err) {
-    res.status(500).send('Gagal memproses media');
+    return new Response('Gagal memproses media', { status: 500 });
   }
 }
