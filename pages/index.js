@@ -5,32 +5,32 @@ const FEATURES = [
   {
     tag: '[format]',
     title: 'All formats supported',
-    body: 'Download photos, videos, reels, IGTV, and carousels from public Instagram posts. All content types are supported as long as the post is public.'
+    body: 'Download photos, videos, reels, IGTV, and carousels from public Instagram posts. Every content type is supported as long as the post is public.'
   },
   {
     tag: '[resolution]',
     title: 'Original resolution',
-    body: 'Files are fetched directly from the source, so their size and quality match what was uploaded by the account owner.'
+    body: 'Files are fetched directly from the source, so size and quality match exactly what the account owner uploaded.'
   },
   {
     tag: '[speed]',
-    title: 'No waiting',
-    body: 'The process runs on the server, not on your phone, so it doesn\'t drain your battery or use your data while waiting.'
+    title: 'No waiting around',
+    body: "The process runs on the server, not on your phone, so it doesn't drain your battery or use your data while you wait."
   },
   {
     tag: '[account]',
     title: 'No Instagram login required',
-    body: 'Just paste the public link. You don\'t need to enter your Instagram username or password.'
+    body: "Just paste the public link. You don't need to enter your Instagram username or password anywhere."
   },
   {
     tag: '[watermark]',
-    title: 'No additional watermarks',
-    body: 'The saved files are identical to the originals, without any logos or backlinks to any website.'
+    title: 'No added watermark',
+    body: 'Saved files are identical to the originals, with no logo or backlink stamped onto them.'
   },
   {
     tag: '[devices]',
-    title: 'Works on phones and computers',
-    body: 'This page is fully responsive, usable via the browser on smartphones, tablets, or laptops without installing any applications.'
+    title: 'Works on phone and desktop',
+    body: 'This page is fully responsive, usable from a phone, tablet, or laptop browser with nothing to install.'
   }
 ];
 
@@ -38,63 +38,59 @@ const STEPS = [
   {
     number: '01',
     title: 'Copy the public post link',
-    body: 'Open the instagram app or website, find the public post you want to download, and copy its link.'
+    body: 'Open Instagram, find the public post, reel, or IGTV video you want to save, and copy its link.'
   },
   {
     number: '02',
-    title: 'Paste in the input box',
-    body: 'Return to this page, paste the link into the input box at the top of the page.'
+    title: 'Paste it into the box',
+    body: 'Come back to this Instagram downloader and paste that link into the input box near the top of the page.'
   },
   {
     number: '03',
-    title: 'Press the download button',
-    body: 'The system will fetch the media data from the post and display a preview on the screen.'
+    title: 'Press download',
+    body: 'This IG downloader fetches the media data from that post and shows a preview of it on screen.'
   },
   {
     number: '04',
     title: 'Save each file',
-    body: 'Click the save file option for each result to download them one by one to your device.'
+    body: 'Click save file on each result to download it individually to your device, named after the original poster.'
   }
 ];
 
-const FORMATS = ['Single Photo', 'Multi-Photo Carousel', 'Video Feed', 'Reels', 'IGTV', 'Public Profile Photo'];
-
-const SITE_URL = 'https://igdownloader.example.com';
-const SITE_NAME = 'IG Downloader';
-const PAGE_TITLE =
-  'IG Downloader - Instagram Downloader Free | Download Photos, Video & Reels Instagram No Watermark';
-const PAGE_DESCRIPTION =
-  'IG Downloader is an instagram downloader completely free to download photos, video, reels, IGTV, dan carousel dari postingan publik Instagram. Without login, without watermark, original quality, flexibility.';
-const OG_IMAGE = `${SITE_URL}/favicon.svg`;
+const FORMATS = ['Single Photo', 'Multi-Photo Carousel', 'Feed Video', 'Reels', 'IGTV', 'Public Profile Photo'];
 
 const FAQS = [
   {
-    q: 'Is this tool free to use?',
-    a: 'Yes. This page does not charge any fees for downloading photos or videos from public Instagram posts.'
+    q: 'Is this Instagram downloader free to use?',
+    a: 'Yes. This page does not charge anything to download photos or videos from public Instagram posts.'
   },
   {
-    q: 'Do I need to log in to my Instagram account?',
-    a: 'No. You only need to paste the link of the public post. There are no username or password fields on this page.'
+    q: 'Do I need to log into my Instagram account?',
+    a: 'No. You only need to paste a public post link. There is no username or password field anywhere on this page.'
   },
   {
-    q: 'Can I download from private accounts?',
-    a: 'No. This tool only works for public posts, according to the privacy settings chosen by the account owner.'
+    q: 'Can this IG downloader save from a private account?',
+    a: 'No. This tool only works for posts that are set to public, based on the privacy setting chosen by the account owner.'
   },
   {
-    q: 'Why does the link I paste sometimes not work?',
-    a: 'There are several possible reasons: the post has been deleted, the account has been changed to private, or the pasted link is incomplete.'
+    q: 'Why is the link I pasted sometimes not found?',
+    a: 'A few possible reasons: the post was deleted, the account was switched to private, or the link you pasted was incomplete.'
   },
   {
-    q: 'Does the downloaded file have a watermark or additional logo?',
-    a: 'No. The files you save are identical to those uploaded by the account owner, without any logos or watermarks.'
+    q: 'Does the downloaded file have a watermark or extra logo?',
+    a: 'No. The file you save is exactly the same as the one the account owner uploaded, with no added logo or watermark.'
   },
   {
-    q: 'Can I download multiple photos at once from a carousel?',
-    a: 'Yes. If the post contains multiple photos or videos in a single carousel, all of them will be displayed and can be saved one by one.'
+    q: 'Can I download several photos from one carousel at once?',
+    a: 'Yes. If a post contains several photos or videos in one carousel, all of them are shown and can be saved one by one.'
   },
   {
-    q: 'Can this page be used on mobile devices?',
-    a: 'Yes. The page layout automatically adjusts for mobile, tablet, and desktop browsers.'
+    q: 'Can this page be used from a phone?',
+    a: 'Yes. The layout adjusts automatically whether it is opened from a phone, tablet, or desktop computer.'
+  },
+  {
+    q: 'How are the downloaded files named?',
+    a: "Each file is named after the Instagram username that posted it. If a post has more than one file, the extra files are numbered, like username, username(1), username(2), and so on."
   }
 ];
 
@@ -120,50 +116,77 @@ export default function Home() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error || 'Terjadi kesalahan');
+        setError(data.error || 'Something went wrong');
       } else {
         setItems(data.items);
       }
     } catch (err) {
-      setError('Gagal terhubung ke server');
+      setError('Could not connect to the server');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const faqJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: FAQS.map((item) => ({
+      '@type': 'Question',
+      name: item.q,
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: item.a
+      }
+    }))
+  };
+
+  const appJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'WebApplication',
+    name: 'Instagram Downloader',
+    alternateName: ['IG Downloader', 'IGDownloader', 'Instagram Media Downloader', 'Instagram Photo and Video Downloader'],
+    applicationCategory: 'UtilityApplication',
+    operatingSystem: 'Any',
+    description:
+      'Free Instagram downloader to save photos, videos, reels, IGTV, and carousels from public Instagram posts. No login, no watermark.',
+    offers: {
+      '@type': 'Offer',
+      price: '0',
+      priceCurrency: 'USD'
     }
   };
 
   return (
     <>
       <Head>
-        <title>{PAGE_TITLE}</title>
-        <meta name="description" content={PAGE_DESCRIPTION} />
+        <title>Instagram Downloader - Free IG Photo, Video &amp; Reels Downloader</title>
+        <meta
+          name="description"
+          content="Free Instagram downloader (IG downloader) to save photos, videos, reels, IGTV, and carousels from public Instagram posts. No login, no watermark, works on mobile and desktop."
+        />
         <meta
           name="keywords"
-          content="instagram downloader, ig downloader, igdownloader, download instagram, download foto instagram, download video instagram, download reels instagram, download igtv, download instagram carousel, unduh video instagram, unduh foto instagram, save instagram video, save instagram photo, instagram video downloader, instagram photo downloader, instagram reels downloader, instagram story downloader, free instagram downloader, instagram downloader no watermark, downloader ig gratis, download ig hd"
+          content="instagram downloader, ig downloader, igdownloader, instagram photo downloader, instagram video downloader, instagram reels downloader, instagram carousel downloader, download instagram photo, download instagram video, download instagram reels, download igtv, free instagram saver, save instagram photo, save instagram video, instagram media downloader"
         />
-        <meta name="robots" content="index, follow, max-image-preview:large" />
-        <meta name="googlebot" content="index, follow" />
-        <meta name="author" content={SITE_NAME} />
+        <meta name="robots" content="index, follow" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="theme-color" content="#c1432e" />
-        <link rel="canonical" href={SITE_URL} />
+        <meta name="author" content="Ramdan Olii" />
 
-        {/* Open Graph */}
-        <meta property="og:site_name" content={SITE_NAME} />
-        <meta property="og:title" content={PAGE_TITLE} />
-        <meta property="og:description" content={PAGE_DESCRIPTION} />
         <meta property="og:type" content="website" />
-        <meta property="og:url" content={SITE_URL} />
-        <meta property="og:image" content={OG_IMAGE} />
-        <meta property="og:image:width" content="1200" />
-        <meta property="og:image:height" content="630" />
-        <meta property="og:locale" content="id_ID" />
-        <meta property="og:locale:alternate" content="en_US" />
+        <meta property="og:site_name" content="Instagram Downloader" />
+        <meta property="og:title" content="Instagram Downloader - Free IG Photo, Video & Reels Downloader" />
+        <meta
+          property="og:description"
+          content="Paste a public Instagram post link and get the original photo or video file in seconds. No login, no watermark."
+        />
+        <meta property="og:locale" content="en_US" />
 
-        {/* Twitter Card */}
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={PAGE_TITLE} />
-        <meta name="twitter:description" content={PAGE_DESCRIPTION} />
-        <meta name="twitter:image" content={OG_IMAGE} />
+        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:title" content="Instagram Downloader - Free IG Photo, Video & Reels Downloader" />
+        <meta
+          name="twitter:description"
+          content="Paste a public Instagram post link and get the original photo or video file in seconds. No login, no watermark."
+        />
 
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="true" />
@@ -172,57 +195,19 @@ export default function Home() {
           rel="stylesheet"
         />
 
-        {/* Structured data: WebApplication */}
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
-              '@context': 'https://schema.org',
-              '@type': 'WebApplication',
-              name: SITE_NAME,
-              alternateName: ['Instagram Downloader', 'IG Downloader', 'IGDownloader'],
-              url: SITE_URL,
-              description: PAGE_DESCRIPTION,
-              applicationCategory: 'MultimediaApplication',
-              operatingSystem: 'Any',
-              offers: {
-                '@type': 'Offer',
-                price: '0',
-                priceCurrency: 'USD'
-              }
-            })
-          }}
-        />
-
-        {/* Structured data: FAQPage */}
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
-              '@context': 'https://schema.org',
-              '@type': 'FAQPage',
-              mainEntity: FAQS.map((item) => ({
-                '@type': 'Question',
-                name: item.q,
-                acceptedAnswer: {
-                  '@type': 'Answer',
-                  text: item.a
-                }
-              }))
-            })
-          }}
-        />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(appJsonLd) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />
       </Head>
 
       <main className="page">
         <header className="topbar">
           <span className="brand">
             <span className="brand-mark" aria-hidden="true" />
-            IG DOWNLOADER
+            INSTAGRAM DOWNLOADER
           </span>
-          <nav className="topnav" aria-label="Navigasi halaman">
-            <a href="#cara-pakai">How to Use</a>
-            <a href="#fitur">Features</a>
+          <nav className="topnav" aria-label="Page navigation">
+            <a href="#how-it-works">How to Use</a>
+            <a href="#features">Features</a>
             <a href="#faq">FAQ</a>
           </nav>
         </header>
@@ -235,17 +220,17 @@ export default function Home() {
             <span className="corner corner-br" />
           </div>
 
-          <p className="eyebrow">frame 001 / Instagram Downloader</p>
-          <h1 id="hero-heading">
-            ig downloader: save instagram photos, videos &amp; reels for free
-          </h1>
+          <p className="eyebrow">frame 001 / download public media</p>
+          <h1 id="hero-heading">Instagram downloader: save photos and videos for free</h1>
           <p className="hero-sub">
-            Paste the link of a public Instagram post and this instagram downloader fetches the original photo, video, reels, IGTV, or carousel files in seconds. No login, no watermark, works on mobile and desktop browsers.
+            Also known as an IG downloader, this free tool lets you paste the link of a public
+            Instagram post, reel, or IGTV video and get the original media file in seconds. No
+            login, no watermark, no app to install.
           </p>
 
           <form onSubmit={handleSubmit} className="download-form">
             <label htmlFor="ig-url" className="sr-only">
-              Link
+              Instagram post link
             </label>
             <input
               id="ig-url"
@@ -270,7 +255,7 @@ export default function Home() {
         {items && (
           <section className="results" aria-labelledby="results-heading">
             <h2 id="results-heading">
-              Hasil ditemukan <span className="count-tag">{items.length} file</span>
+              Results found <span className="count-tag">{items.length} file{items.length > 1 ? 's' : ''}</span>
             </h2>
             <div className="results-grid">
               {items.map((item, index) => (
@@ -279,25 +264,23 @@ export default function Home() {
                   {item.type === 'video' ? (
                     <video src={item.mediaUrl} controls />
                   ) : (
-                    <img src={item.mediaUrl} alt={`Media instagram nomor ${index + 1}`} />
+                    <img src={item.mediaUrl} alt={`Instagram media by ${item.username || 'unknown user'}`} />
                   )}
+                  <span className="frame-name">{item.filename}</span>
                   <a
-                    href={`/api/proxy?url=${encodeURIComponent(item.mediaUrl)}&name=${encodeURIComponent(
-                      item.filename || 'instagram-media'
-                    )}`}
+                    href={`/api/proxy?url=${encodeURIComponent(item.mediaUrl)}&filename=${encodeURIComponent(item.filename)}`}
                   >
                     Save File
                   </a>
-                  {item.filename && <span className="frame-filename">{item.filename}</span>}
                 </article>
               ))}
             </div>
           </section>
         )}
 
-        <section className="how-to" id="cara-pakai" aria-labelledby="how-to-heading">
+        <section className="how-to" id="how-it-works" aria-labelledby="how-to-heading">
           <p className="eyebrow">frame 002 / guide</p>
-          <h2 id="how-to-heading">How to Use This Tool</h2>
+          <h2 id="how-to-heading">How to use this Instagram downloader</h2>
           <ol className="steps">
             {STEPS.map((step) => (
               <li className="step" key={step.number}>
@@ -311,9 +294,9 @@ export default function Home() {
           </ol>
         </section>
 
-        <section className="features" id="fitur" aria-labelledby="features-heading">
+        <section className="features" id="features" aria-labelledby="features-heading">
           <p className="eyebrow">frame 003 / benefits</p>
-          <h2 id="features-heading">Why Use This Page</h2>
+          <h2 id="features-heading">Why use this IG downloader</h2>
           <div className="feature-grid">
             {FEATURES.map((feature) => (
               <div className="feature-card" key={feature.title}>
@@ -327,10 +310,10 @@ export default function Home() {
 
         <section className="formats" aria-labelledby="formats-heading">
           <p className="eyebrow">frame 004 / content types</p>
-          <h2 id="formats-heading">Supported Content Types</h2>
+          <h2 id="formats-heading">Supported content types</h2>
           <p className="formats-intro">
-            As long as the post is public, this page can read and prepare files from
-            the following types of instagram content.
+            As long as the post is public, this Instagram media downloader can read and prepare
+            files from the following content types.
           </p>
           <ul className="format-list">
             {FORMATS.map((format) => (
@@ -341,7 +324,7 @@ export default function Home() {
 
         <section className="faq" id="faq" aria-labelledby="faq-heading">
           <p className="eyebrow">frame 005 / frequently asked questions</p>
-          <h2 id="faq-heading">Frequently Asked Questions</h2>
+          <h2 id="faq-heading">Frequently asked questions</h2>
           <div className="faq-list">
             {FAQS.map((item) => (
               <details className="faq-item" key={item.q}>
@@ -354,11 +337,15 @@ export default function Home() {
 
         <footer className="footer">
           <p>
-            This is an independent third-party tool and is not affiliated with, sponsored by, or endorsed by Instagram or Meta Platforms Inc. All brand names are the property of their respective owners.
+            This page is an independent third-party tool and is not affiliated with, sponsored by,
+            or officially endorsed by Instagram or Meta Platforms Inc. All brand names belong to
+            their respective owners.
           </p>
           <p>
-            Use this tool responsibly. Respect the copyright of content creators and do not redistribute downloaded material without permission from the original creators.
+            Use this tool responsibly. Respect the content owner's copyright and do not redistribute
+            downloaded material without permission from the original creator.
           </p>
+          <p className="copyright">&copy; {new Date().getFullYear()} Made with love by Ramdan Olii</p>
         </footer>
       </main>
 
@@ -402,7 +389,7 @@ export default function Home() {
           gap: 10px;
           font-family: 'Space Grotesk', sans-serif;
           font-weight: 700;
-          font-size: 18px;
+          font-size: 16px;
           letter-spacing: 0.02em;
         }
 
@@ -412,6 +399,7 @@ export default function Home() {
           background: #c1432e;
           border-radius: 3px;
           display: inline-block;
+          flex-shrink: 0;
         }
 
         .topnav {
@@ -483,7 +471,7 @@ export default function Home() {
 
         .hero h1 {
           font-family: 'Space Grotesk', sans-serif;
-          font-size: clamp(28px, 4vw, 44px);
+          font-size: clamp(26px, 4vw, 42px);
           line-height: 1.15;
           margin: 0 0 16px;
           max-width: 720px;
@@ -583,7 +571,7 @@ export default function Home() {
           padding: 10px;
           display: flex;
           flex-direction: column;
-          gap: 10px;
+          gap: 8px;
         }
 
         .frame-number {
@@ -600,6 +588,15 @@ export default function Home() {
           background: #eee;
         }
 
+        .frame-name {
+          font-family: 'IBM Plex Mono', monospace;
+          font-size: 11px;
+          color: #3d3b35;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
         .frame-card a {
           text-align: center;
           padding: 10px;
@@ -612,14 +609,6 @@ export default function Home() {
 
         .frame-card a:hover {
           background: #2f3b58;
-        }
-
-        .frame-filename {
-          font-family: 'IBM Plex Mono', monospace;
-          font-size: 11px;
-          color: #6b6a63;
-          text-align: center;
-          word-break: break-all;
         }
 
         section.how-to,
@@ -764,6 +753,12 @@ export default function Home() {
 
         .footer p {
           margin: 0 0 8px;
+        }
+
+        .footer .copyright {
+          margin-top: 16px;
+          font-family: 'IBM Plex Mono', monospace;
+          color: #1c1b18;
         }
 
         @media (prefers-reduced-motion: reduce) {
