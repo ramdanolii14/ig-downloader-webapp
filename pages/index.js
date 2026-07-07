@@ -62,10 +62,10 @@ const FORMATS = ['Single Photo', 'Multi-Photo Carousel', 'Video Feed', 'Reels', 
 const SITE_URL = 'https://igdownloader.example.com';
 const SITE_NAME = 'IG Downloader';
 const PAGE_TITLE =
-  'IG Downloader - Instagram Downloader Free | Download Foto, Video & Reels Instagram Tanpa Watermark';
+  'IG Downloader - Instagram Downloader Free | Download Photos, Video & Reels Instagram No Watermark';
 const PAGE_DESCRIPTION =
-  'IG Downloader adalah instagram downloader gratis untuk download foto, video, reels, IGTV, dan carousel dari postingan publik Instagram. Tanpa login, tanpa watermark, kualitas original, bisa dipakai di HP maupun laptop.';
-const OG_IMAGE = `${SITE_URL}/og-image.jpg`;
+  'IG Downloader is an instagram downloader completely free to download photos, video, reels, IGTV, dan carousel dari postingan publik Instagram. Without login, without watermark, original quality, flexibility.';
+const OG_IMAGE = `${SITE_URL}/favicon.svg`;
 
 const FAQS = [
   {
