@@ -151,7 +151,7 @@ export default function Terms() {
         <p>
           Questions about these terms can be directed to{' '}
           <a href="mailto:developer@nyanpixel.my.id">developer@nyanpixel.my.id</a>.
-        </p>
+        </p> 
       </main>
 
       <style jsx>{`
