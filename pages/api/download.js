@@ -6,24 +6,28 @@ function extractShortcode(url) {
   return match ? match[1] : null;
 }
 
+function sanitizeUsername(name) {
+  if (!name || typeof name !== 'string') return null;
+  const cleaned = name.trim().replace(/[^a-zA-Z0-9._-]/g, '');
+  return cleaned.length > 0 ? cleaned : null;
+}
+
 function buildMediaList(media) {
   if (!media) return [];
-
-  const username = media.owner && media.owner.username ? media.owner.username : null;
 
   if (media.edge_sidecar_to_children) {
     return media.edge_sidecar_to_children.edges.map((edge) => {
       const node = edge.node;
       return node.is_video
-        ? { type: 'video', mediaUrl: node.video_url, username }
-        : { type: 'image', mediaUrl: node.display_url, username };
+        ? { type: 'video', mediaUrl: node.video_url }
+        : { type: 'image', mediaUrl: node.display_url };
     });
   }
 
   return [
     media.is_video
-      ? { type: 'video', mediaUrl: media.video_url, username }
-      : { type: 'image', mediaUrl: media.display_url, username }
+      ? { type: 'video', mediaUrl: media.video_url }
+      : { type: 'image', mediaUrl: media.display_url }
   ];
 }
 
@@ -63,12 +67,18 @@ async function fetchFromRapidApi(shortcode) {
       const media = item.urls && item.urls[0];
       if (!media || !media.url) return null;
       const isVideo = media.extension === 'mp4';
-      const username = item.meta && item.meta.username ? item.meta.username : null;
-      return { type: isVideo ? 'video' : 'image', mediaUrl: media.url, username };
+      return { type: isVideo ? 'video' : 'image', mediaUrl: media.url };
     })
     .filter(Boolean);
 
-  return items.length > 0 ? items : null;
+  if (items.length === 0) return null;
+
+  const first = json[0] || {};
+  const username = sanitizeUsername(
+    first.owner?.username || first.username || first.author?.username || null
+  );
+
+  return { username, items };
 }
 
 async function fetchFromSocialKit(url) {
@@ -103,7 +113,11 @@ async function fetchFromSocialKit(url) {
 
   if (!json.success || !json.data || !json.data.downloadUrl) return null;
 
-  return [{ type: 'video', mediaUrl: json.data.downloadUrl, username: null }];
+  const username = sanitizeUsername(
+    json.data.username || json.data.author?.username || json.data.uploader || null
+  );
+
+  return { username, items: [{ type: 'video', mediaUrl: json.data.downloadUrl }] };
 }
 
 async function fetchFromGraphql(shortcode) {
@@ -143,7 +157,12 @@ async function fetchFromGraphql(shortcode) {
   const media = json?.data?.xdt_shortcode_media;
   if (!media) return null;
 
-  return buildMediaList(media);
+  const items = buildMediaList(media);
+  if (items.length === 0) return null;
+
+  const username = sanitizeUsername(media.owner?.username);
+
+  return { username, items };
 }
 
 async function fetchFromMagicParams(shortcode) {
@@ -180,41 +199,45 @@ async function fetchFromMagicParams(shortcode) {
   const item = json?.items?.[0];
   if (!item) return null;
 
-  const username = item.user && item.user.username ? item.user.username : null;
+  const username = sanitizeUsername(item.user?.username);
 
   if (item.product_type === 'carousel_container' && item.carousel_media) {
-    return item.carousel_media
+    const items = item.carousel_media
       .map((m) => {
         if (m.video_versions && m.video_versions.length > 0) {
-          return { type: 'video', mediaUrl: m.video_versions[0].url, username };
+          return { type: 'video', mediaUrl: m.video_versions[0].url };
         }
         const best = m.image_versions2 && m.image_versions2.candidates && m.image_versions2.candidates[0];
-        return best ? { type: 'image', mediaUrl: best.url, username } : null;
+        return best ? { type: 'image', mediaUrl: best.url } : null;
       })
       .filter(Boolean);
+    return items.length > 0 ? { username, items } : null;
   }
 
   if (item.video_versions && item.video_versions.length > 0) {
-    return [{ type: 'video', mediaUrl: item.video_versions[0].url, username }];
+    return { username, items: [{ type: 'video', mediaUrl: item.video_versions[0].url }] };
   }
 
   const best = item.image_versions2 && item.image_versions2.candidates && item.image_versions2.candidates[0];
-  return best ? [{ type: 'image', mediaUrl: best.url, username }] : null;
+  return best ? { username, items: [{ type: 'image', mediaUrl: best.url }] } : null;
 }
 
-function attachFilenames(items) {
-  const counts = {};
+async function resolveUsernameFallback(shortcode) {
+  try {
+    const graphqlResult = await fetchFromGraphql(shortcode);
+    if (graphqlResult && graphqlResult.username) return graphqlResult.username;
+  } catch {
+    // ignore, try next source
+  }
 
-  return items.map((item) => {
-    const base = (item.username || 'instagram').toLowerCase().replace(/[^a-z0-9_.-]/g, '');
-    const safeBase = base || 'instagram';
+  try {
+    const magicResult = await fetchFromMagicParams(shortcode);
+    if (magicResult && magicResult.username) return magicResult.username;
+  } catch {
+    // ignore, fall back to default name
+  }
 
-    counts[safeBase] = (counts[safeBase] || 0) + 1;
-    const occurrence = counts[safeBase];
-    const filename = occurrence === 1 ? safeBase : `${safeBase}(${occurrence - 1})`;
-
-    return { ...item, filename };
-  });
+  return null;
 }
 
 export default async function handler(req, res) {
@@ -225,13 +248,13 @@ export default async function handler(req, res) {
   const { url } = req.body || {};
 
   if (!url || !url.includes('instagram.com')) {
-    return res.status(400).json({ error: 'Invalid Instagram URL' });
+    return res.status(400).json({ error: 'URL Instagram tidak valid' });
   }
 
   const shortcode = extractShortcode(url);
 
   if (!shortcode) {
-    return res.status(400).json({ error: 'Unrecognized URL format' });
+    return res.status(400).json({ error: 'Format URL tidak dikenali' });
   }
 
   console.log('[handler] shortcode:', shortcode);
@@ -240,29 +263,35 @@ export default async function handler(req, res) {
   console.log('[handler] sessionid set:', Boolean(process.env.INSTAGRAM_SESSIONID));
 
   try {
-    let items = await fetchFromRapidApi(shortcode);
+    let result = await fetchFromRapidApi(shortcode);
 
-    if (!items || items.length === 0) {
-      items = await fetchFromSocialKit(url);
+    if (!result || !result.items || result.items.length === 0) {
+      result = await fetchFromSocialKit(url);
     }
 
-    if (!items || items.length === 0) {
-      items = await fetchFromGraphql(shortcode);
+    if (!result || !result.items || result.items.length === 0) {
+      result = await fetchFromGraphql(shortcode);
     }
 
-    if (!items || items.length === 0) {
-      items = await fetchFromMagicParams(shortcode);
+    if (!result || !result.items || result.items.length === 0) {
+      result = await fetchFromMagicParams(shortcode);
     }
 
-    if (!items || items.length === 0) {
+    if (!result || !result.items || result.items.length === 0) {
       return res.status(404).json({
-        error: 'Media not found. Check the terminal log for details'
+        error: 'Media tidak ditemukan. Cek log terminal untuk detail penyebabnya'
       });
     }
 
-    return res.status(200).json({ items: attachFilenames(items) });
+    const baseName = result.username || (await resolveUsernameFallback(shortcode)) || 'instagram';
+    const items = result.items.map((item) => ({
+      ...item,
+      filename: baseName
+    }));
+
+    return res.status(200).json({ items });
   } catch (err) {
     console.log('[handler] error:', err.message);
-    return res.status(500).json({ error: 'Something went wrong while fetching data' });
+    return res.status(500).json({ error: 'Terjadi kesalahan saat mengambil data' });
   }
 }
