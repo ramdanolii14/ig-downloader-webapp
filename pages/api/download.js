@@ -1,6 +1,65 @@
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36';
 
+// --- Rate limiting -----------------------------------------------------
+// In-memory per-IP limiter. This protects a single running Node process
+// (e.g. `npm run dev`, or one VPS/PM2 instance) from spam clicks and
+// scripted abuse hitting the paid RapidAPI/SocialKit quota. It does NOT
+// share state across multiple serverless instances — if you deploy to
+// Vercel with multiple concurrent lambdas, use a shared store like
+// Upstash Redis instead for a hard guarantee.
+const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute window
+const RATE_LIMIT_MAX_REQUESTS = 6; // max 6 downloads per IP per minute
+const MIN_INTERVAL_MS = 2000; // minimum 2s between requests per IP (blocks double/spam clicks)
+
+const rateLimitStore = new Map(); // ip -> { timestamps: number[], lastRequest: number }
+
+function getClientIp(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (forwarded) return forwarded.split(',')[0].trim();
+  return req.socket?.remoteAddress || 'unknown';
+}
+
+function checkRateLimit(ip) {
+  const now = Date.now();
+  let entry = rateLimitStore.get(ip);
+  if (!entry) {
+    entry = { timestamps: [], lastRequest: 0 };
+    rateLimitStore.set(ip, entry);
+  }
+
+  if (now - entry.lastRequest < MIN_INTERVAL_MS) {
+    return {
+      allowed: false,
+      reason: 'too_fast',
+      retryAfter: Math.ceil((MIN_INTERVAL_MS - (now - entry.lastRequest)) / 1000)
+    };
+  }
+
+  entry.timestamps = entry.timestamps.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+  if (entry.timestamps.length >= RATE_LIMIT_MAX_REQUESTS) {
+    const oldest = entry.timestamps[0];
+    const retryAfter = Math.ceil((RATE_LIMIT_WINDOW_MS - (now - oldest)) / 1000);
+    return { allowed: false, reason: 'rate_limited', retryAfter };
+  }
+
+  entry.timestamps.push(now);
+  entry.lastRequest = now;
+  return { allowed: true };
+}
+
+// Periodic cleanup so the map doesn't grow forever on a long-running process.
+const cleanupTimer = setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of rateLimitStore.entries()) {
+    if (now - entry.lastRequest > RATE_LIMIT_WINDOW_MS * 2) {
+      rateLimitStore.delete(ip);
+    }
+  }
+}, RATE_LIMIT_WINDOW_MS);
+if (typeof cleanupTimer.unref === 'function') cleanupTimer.unref();
+// -------------------------------------------------------------------
+
 function extractShortcode(url) {
   const match = url.match(/instagram\.com\/(?:[A-Za-z0-9_.]+\/)?(?:p|reel|reels|tv)\/([A-Za-z0-9-_]+)/);
   return match ? match[1] : null;
@@ -86,8 +145,17 @@ async function fetchFromRapidApi(shortcode) {
 
   const first = json[0] || {};
   console.log('[fetchFromRapidApi] first item keys:', Object.keys(first));
+  console.log('[fetchFromRapidApi] meta field:', JSON.stringify(first.meta));
   const username = sanitizeUsername(
-    first.owner?.username || first.username || first.author?.username || null
+    first.owner?.username ||
+      first.username ||
+      first.author?.username ||
+      first.meta?.username ||
+      first.meta?.owner?.username ||
+      first.meta?.author?.username ||
+      first.meta?.user?.username ||
+      first.meta?.uploader ||
+      null
   );
   console.log('[fetchFromRapidApi] resolved username:', username);
 
@@ -159,6 +227,11 @@ async function fetchFromGraphql(shortcode) {
   console.log('[fetchFromGraphql] body preview:', text.slice(0, 300));
 
   if (!response.ok) return null;
+
+  if (text.trim().startsWith('<')) {
+    console.log('[fetchFromGraphql] got HTML instead of JSON — request was blocked/rejected by Instagram');
+    return null;
+  }
 
   let json;
   try {
@@ -269,16 +342,31 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  const clientIp = getClientIp(req);
+  const rateCheck = checkRateLimit(clientIp);
+
+  if (!rateCheck.allowed) {
+    console.log(`[handler] rate limit hit for ${clientIp}: ${rateCheck.reason}`);
+    res.setHeader('Retry-After', String(rateCheck.retryAfter));
+    return res.status(429).json({
+      error:
+        rateCheck.reason === 'too_fast'
+          ? 'You are clicking too fast. Please wait a moment and try again.'
+          : `Too many requests from this device. Try again in ${rateCheck.retryAfter} seconds.`,
+      retryAfter: rateCheck.retryAfter
+    });
+  }
+
   const { url } = req.body || {};
 
   if (!url || !url.includes('instagram.com')) {
-    return res.status(400).json({ error: 'URL Instagram tidak valid' });
+    return res.status(400).json({ error: 'Invalid Instagram URL' });
   }
 
   const shortcode = extractShortcode(url);
 
   if (!shortcode) {
-    return res.status(400).json({ error: 'Format URL tidak dikenali' });
+    return res.status(400).json({ error: 'Unrecognized URL format' });
   }
 
   console.log('[handler] shortcode:', shortcode);
@@ -303,7 +391,7 @@ export default async function handler(req, res) {
 
     if (!result || !result.items || result.items.length === 0) {
       return res.status(404).json({
-        error: 'Media tidak ditemukan. Cek log terminal untuk detail penyebabnya'
+        error: 'Media not found. Check the terminal log for details on why.'
       });
     }
 
@@ -321,6 +409,6 @@ export default async function handler(req, res) {
     return res.status(200).json({ items });
   } catch (err) {
     console.log('[handler] error:', err.message);
-    return res.status(500).json({ error: 'Terjadi kesalahan saat mengambil data' });
+    return res.status(500).json({ error: 'Something went wrong while fetching the data' });
   }
 }
