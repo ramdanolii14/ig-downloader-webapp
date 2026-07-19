@@ -283,7 +283,7 @@ export default async function handler(req, res) {
       });
     }
 
-    const baseName = result.username || (await resolveUsernameFallback(shortcode)) || 'instagram';
+    const baseName = result.username || (await resolveUsernameFallback(shortcode));
     const items = result.items.map((item) => ({
       ...item,
       filename: baseName
