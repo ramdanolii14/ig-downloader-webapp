@@ -6,6 +6,17 @@ function extractShortcode(url) {
   return match ? match[1] : null;
 }
 
+function extractUsernameFromUrl(url) {
+  // Matches instagram.com/<username>/p|reel|reels|tv/<shortcode>
+  // Skips reserved path segments that aren't real usernames (e.g. /reel/<code> with no username).
+  const match = url.match(/instagram\.com\/([A-Za-z0-9_.]+)\/(?:p|reel|reels|tv)\//);
+  if (!match) return null;
+  const candidate = match[1];
+  const reserved = ['p', 'reel', 'reels', 'tv', 'stories'];
+  if (reserved.includes(candidate.toLowerCase())) return null;
+  return sanitizeUsername(candidate);
+}
+
 function sanitizeUsername(name) {
   if (!name || typeof name !== 'string') return null;
   const cleaned = name.trim().replace(/[^a-zA-Z0-9._-]/g, '');
@@ -74,9 +85,11 @@ async function fetchFromRapidApi(shortcode) {
   if (items.length === 0) return null;
 
   const first = json[0] || {};
+  console.log('[fetchFromRapidApi] first item keys:', Object.keys(first));
   const username = sanitizeUsername(
     first.owner?.username || first.username || first.author?.username || null
   );
+  console.log('[fetchFromRapidApi] resolved username:', username);
 
   return { username, items };
 }
@@ -223,20 +236,31 @@ async function fetchFromMagicParams(shortcode) {
 }
 
 async function resolveUsernameFallback(shortcode) {
+  console.log('[resolveUsernameFallback] trying graphql for shortcode:', shortcode);
   try {
     const graphqlResult = await fetchFromGraphql(shortcode);
-    if (graphqlResult && graphqlResult.username) return graphqlResult.username;
-  } catch {
-    // ignore, try next source
+    if (graphqlResult && graphqlResult.username) {
+      console.log('[resolveUsernameFallback] got username from graphql:', graphqlResult.username);
+      return graphqlResult.username;
+    }
+    console.log('[resolveUsernameFallback] graphql returned no username');
+  } catch (err) {
+    console.log('[resolveUsernameFallback] graphql error:', err.message);
   }
 
+  console.log('[resolveUsernameFallback] trying magicParams for shortcode:', shortcode);
   try {
     const magicResult = await fetchFromMagicParams(shortcode);
-    if (magicResult && magicResult.username) return magicResult.username;
-  } catch {
-    // ignore, fall back to default name
+    if (magicResult && magicResult.username) {
+      console.log('[resolveUsernameFallback] got username from magicParams:', magicResult.username);
+      return magicResult.username;
+    }
+    console.log('[resolveUsernameFallback] magicParams returned no username');
+  } catch (err) {
+    console.log('[resolveUsernameFallback] magicParams error:', err.message);
   }
 
+  console.log('[resolveUsernameFallback] all sources failed, no username resolved');
   return null;
 }
 
@@ -283,7 +307,12 @@ export default async function handler(req, res) {
       });
     }
 
-    const baseName = result.username || (await resolveUsernameFallback(shortcode));
+    const baseName =
+      result.username ||
+      extractUsernameFromUrl(url) ||
+      (await resolveUsernameFallback(shortcode)) ||
+      'instagram';
+    console.log('[handler] final baseName used for filename:', baseName);
     const items = result.items.map((item) => ({
       ...item,
       filename: baseName
