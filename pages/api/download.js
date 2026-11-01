@@ -1,10 +1,7 @@
-const USER_AGENT =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36';
-
 // --- Rate limiting -----------------------------------------------------
 // In-memory per-IP limiter. This protects a single running Node process
 // (e.g. `npm run dev`, or one VPS/PM2 instance) from spam clicks and
-// scripted abuse hitting the paid RapidAPI/SocialKit quota. It does NOT
+// scripted abuse hitting the SocialKit API quota. It does NOT
 // share state across multiple serverless instances — if you deploy to
 // Vercel with multiple concurrent lambdas, use a shared store like
 // Upstash Redis instead for a hard guarantee.
@@ -82,25 +79,6 @@ function sanitizeUsername(name) {
   return cleaned.length > 0 ? cleaned : null;
 }
 
-function buildMediaList(media) {
-  if (!media) return [];
-
-  if (media.edge_sidecar_to_children) {
-    return media.edge_sidecar_to_children.edges.map((edge) => {
-      const node = edge.node;
-      return node.is_video
-        ? { type: 'video', mediaUrl: node.video_url }
-        : { type: 'image', mediaUrl: node.display_url };
-    });
-  }
-
-  return [
-    media.is_video
-      ? { type: 'video', mediaUrl: media.video_url }
-      : { type: 'image', mediaUrl: media.display_url }
-  ];
-}
-
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -124,7 +102,7 @@ async function requestProviderJson(url, options, provider) {
 
         const retryable =
           response.status === 429 ||
-          [502, 503, 504].includes(response.status);
+          [500, 502, 503, 504].includes(response.status);
 
         if (retryable && attempt < PROVIDER_MAX_ATTEMPTS) {
           const retryAfterSeconds = Number(response.headers.get('retry-after'));
