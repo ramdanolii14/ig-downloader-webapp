@@ -252,10 +252,11 @@ async function fetchFromSocialKitStats(url) {
     };
   }
 
-  if (data.contentType === 'carousel') {
-    console.log('[fetchFromSocialKitStats] carousel detected; API only documents the cover thumbnail');
+  if (data.contentType === 'carousel' || data.contentType === 'carousel_container') {
+    console.log('[fetchFromSocialKitStats] carousel detected; resolving all available image slides from channel-posts');
     return {
       result: null,
+      username: sanitizeUsername(data.author || data.username || null),
       temporarilyUnavailable: false,
       unsupportedCarousel: true
     };
@@ -288,6 +289,167 @@ async function fetchFromSocialKitStats(url) {
     result: null,
     temporarilyUnavailable: false
   };
+}
+
+function readImageUrl(entry, depth = 0) {
+  if (!entry || typeof entry !== 'object' || depth > 3) return null;
+
+  const urlKeys = [
+    'url',
+    'imageUrl',
+    'mediaUrl',
+    'src',
+    'displayUrl',
+    'thumbnailUrl',
+    'image_url',
+    'media_url'
+  ];
+
+  for (const key of urlKeys) {
+    if (isHttpsMediaUrl(entry[key])) return entry[key];
+  }
+
+  const nestedKeys = ['image', 'media', 'source', 'asset', 'download'];
+  for (const key of nestedKeys) {
+    const nestedUrl = readImageUrl(entry[key], depth + 1);
+    if (nestedUrl) return nestedUrl;
+  }
+
+  return null;
+}
+
+function buildCarouselImageItems(post) {
+  const collection = Array.isArray(post?.imageCollection)
+    ? post.imageCollection
+    : Array.isArray(post?.imageCollection?.items)
+      ? post.imageCollection.items
+      : [];
+
+  const available = collection
+    .filter((entry) => entry && entry.status === 'available')
+    .map((entry, index) => ({
+      entry,
+      index,
+      position: Number.isInteger(Number(entry.position)) ? Number(entry.position) : null,
+      mediaUrl: readImageUrl(entry)
+    }))
+    .filter((item) => item.mediaUrl);
+
+  const orderIsSource = post?.imageCollection?.order === 'source';
+  if (orderIsSource) {
+    available.sort((a, b) => {
+      if (a.position === null) return 1;
+      if (b.position === null) return -1;
+      return a.position - b.position;
+    });
+  }
+
+  return available.map((item) => ({
+    type: 'image',
+    mediaUrl: item.mediaUrl,
+    ...(orderIsSource && item.position !== null ? { position: item.position } : {})
+  }));
+}
+
+// SocialKit exposes carousel image slides through imageCollection on the
+// Channel Posts endpoint. It is a profile-feed endpoint, so use the author
+// returned by Stats, then match the exact shortcode. Limit pagination to
+// five pages (100 posts) to avoid unbounded provider requests/credit usage.
+async function fetchCarouselFromSocialKit(username, shortcode) {
+  if (!username) {
+    console.log('[fetchCarouselFromSocialKit] no author username available');
+    return {
+      result: null,
+      temporarilyUnavailable: false,
+      notFound: true
+    };
+  }
+
+  const accessKey = process.env.SOCIALKIT_ACCESS_KEY;
+  if (!accessKey) {
+    return {
+      result: null,
+      temporarilyUnavailable: false,
+      notFound: true
+    };
+  }
+
+  const profileUrl = 'https://www.instagram.com/' + encodeURIComponent(username) + '/';
+  let cursor = null;
+  let providerUnavailable = false;
+
+  for (let page = 1; page <= 5; page += 1) {
+    const endpoint = new URL('https://api.socialkit.dev/instagram/channel-posts');
+    endpoint.searchParams.set('url', profileUrl);
+    endpoint.searchParams.set('limit', '20');
+    if (cursor) endpoint.searchParams.set('cursor', cursor);
+
+    const response = await requestProviderJson(
+      endpoint.toString(),
+      {
+        method: 'GET',
+        headers: { 'x-access-key': accessKey }
+      },
+      'fetchFromSocialKitChannelPosts'
+    );
+
+    if (!response.json?.success) {
+      providerUnavailable = response.temporarilyUnavailable ||
+        (response.status >= 500) ||
+        response.status === 429;
+
+      console.log('[fetchFromSocialKitChannelPosts] failed to retrieve profile page', page);
+      break;
+    }
+
+    const data = response.json.data || {};
+    const posts = Array.isArray(data.items) ? data.items : [];
+    const target = posts.find((post) => {
+      if (post?.shortcode === shortcode) return true;
+      if (typeof post?.url !== 'string') return false;
+      return extractShortcode(post.url) === shortcode;
+    });
+
+    if (target) {
+      const items = buildCarouselImageItems(target);
+      console.log('[fetchFromSocialKitChannelPosts] matching post found; available image slides:', items.length);
+
+      if (items.length > 0) {
+        const author = sanitizeUsername(target.author?.username || username);
+        return {
+          result: { username: author, items },
+          temporarilyUnavailable: false,
+          partial: items.length < collectionExpectedCount(target)
+        };
+      }
+
+      return {
+        result: null,
+        temporarilyUnavailable: false,
+        noAvailableImages: true
+      };
+    }
+
+    if (data.hasMore !== true || !data.cursor) break;
+    cursor = data.cursor;
+  }
+
+  return {
+    result: null,
+    temporarilyUnavailable: providerUnavailable,
+    notFound: !providerUnavailable
+  };
+}
+
+function collectionExpectedCount(post) {
+  const collection = post?.imageCollection;
+  if (Array.isArray(collection)) {
+    return collection.length;
+  }
+  if (Array.isArray(collection?.items)) {
+    return collection.items.length;
+  }
+  return 0;
 }
 
 export default async function handler(req, res) {
@@ -348,12 +510,31 @@ export default async function handler(req, res) {
       result = statsResponse.result;
       providerUnavailable = providerUnavailable || statsResponse.temporarilyUnavailable;
       unsupportedCarousel = statsResponse.unsupportedCarousel === true;
+
+      if (unsupportedCarousel) {
+        const carouselResponse = await fetchCarouselFromSocialKit(
+          statsResponse.username,
+          shortcode
+        );
+        result = carouselResponse.result;
+        providerUnavailable = providerUnavailable || carouselResponse.temporarilyUnavailable;
+
+        if (carouselResponse.noAvailableImages) {
+          return res.status(422).json({
+            error: 'Instagram found this carousel, but no downloadable image slides are currently available. Please try again later.'
+          });
+        }
+
+        if (carouselResponse.notFound && !providerUnavailable) {
+          console.log('[handler] carousel post was not found within the first 100 profile posts');
+        }
+      }
     }
 
     if (!result || !result.items || result.items.length === 0) {
-      if (unsupportedCarousel) {
+      if (unsupportedCarousel && !providerUnavailable) {
         return res.status(422).json({
-          error: 'This provider currently returns only a carousel cover image, not every slide. Try a single photo or video post instead.'
+          error: 'Could not retrieve the carousel slides. The post may be older than the latest 100 profile posts, or Instagram did not provide its slide images.'
         });
       }
 
@@ -370,12 +551,18 @@ export default async function handler(req, res) {
 
     const baseName = result.username || extractUsernameFromUrl(url) || 'instagram';
     console.log('[handler] final baseName used for filename:', baseName);
-    const items = result.items.map((item) => ({
+    const isCarousel = result.items.length > 1;
+    const items = result.items.map((item, index) => ({
       ...item,
-      filename: baseName
+      filename: isCarousel
+        ? baseName + '-' + String(index + 1).padStart(2, '0')
+        : baseName
     }));
 
-    return res.status(200).json({ items });
+    return res.status(200).json({
+      items,
+      ...(isCarousel ? { message: 'Available carousel image slides were found.' } : {})
+    });
   } catch (err) {
     console.log('[handler] error:', err.message);
     return res.status(500).json({ error: 'Something went wrong while fetching the data' });
