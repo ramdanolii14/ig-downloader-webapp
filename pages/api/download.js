@@ -333,7 +333,9 @@ function buildCarouselImageItems(post) {
     .map((entry, index) => ({
       entry,
       index,
-      position: Number.isInteger(Number(entry.position)) ? Number(entry.position) : null,
+      position: entry.position !== null && entry.position !== undefined && entry.position !== '' && Number.isInteger(Number(entry.position))
+        ? Number(entry.position)
+        : null,
       mediaUrl: readImageUrl(entry)
     }))
     .filter((item) => item.mediaUrl);
@@ -342,9 +344,10 @@ function buildCarouselImageItems(post) {
     post?.imageCollection?.metadata?.order === 'source';
   if (orderIsSource) {
     available.sort((a, b) => {
+      if (a.position === null && b.position === null) return a.index - b.index;
       if (a.position === null) return 1;
       if (b.position === null) return -1;
-      return a.position - b.position;
+      return a.position - b.position || a.index - b.index;
     });
   }
 
