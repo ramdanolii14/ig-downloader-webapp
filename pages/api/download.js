@@ -292,6 +292,7 @@ async function fetchFromSocialKitStats(url) {
 }
 
 function readImageUrl(entry, depth = 0) {
+  if (typeof entry === 'string') return isHttpsMediaUrl(entry) ? entry : null;
   if (!entry || typeof entry !== 'object' || depth > 3) return null;
 
   const urlKeys = [
@@ -323,10 +324,12 @@ function buildCarouselImageItems(post) {
     ? post.imageCollection
     : Array.isArray(post?.imageCollection?.items)
       ? post.imageCollection.items
-      : [];
+      : Array.isArray(post?.imageCollection?.images)
+        ? post.imageCollection.images
+        : [];
 
   const available = collection
-    .filter((entry) => entry && entry.status === 'available')
+    .filter((entry) => entry && String(entry.status || '').toLowerCase() === 'available')
     .map((entry, index) => ({
       entry,
       index,
@@ -335,7 +338,8 @@ function buildCarouselImageItems(post) {
     }))
     .filter((item) => item.mediaUrl);
 
-  const orderIsSource = post?.imageCollection?.order === 'source';
+  const orderIsSource = post?.imageCollection?.order === 'source' ||
+    post?.imageCollection?.metadata?.order === 'source';
   if (orderIsSource) {
     available.sort((a, b) => {
       if (a.position === null) return 1;
@@ -504,6 +508,7 @@ export default async function handler(req, res) {
     let result = downloadResponse.result;
     let providerUnavailable = downloadResponse.temporarilyUnavailable;
     let unsupportedCarousel = false;
+    let mediaWarning = null;
 
     if (!result) {
       const statsResponse = await fetchFromSocialKitStats(url);
@@ -518,6 +523,9 @@ export default async function handler(req, res) {
         );
         result = carouselResponse.result;
         providerUnavailable = providerUnavailable || carouselResponse.temporarilyUnavailable;
+        if (carouselResponse.partial) {
+          mediaWarning = 'Some carousel images are unavailable. The displayed files are all images currently provided by Instagram.';
+        }
 
         if (carouselResponse.noAvailableImages) {
           return res.status(422).json({
@@ -561,7 +569,8 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       items,
-      ...(isCarousel ? { message: 'Available carousel image slides were found.' } : {})
+      ...(isCarousel ? { message: 'Available carousel image slides were found.' } : {}),
+      ...(mediaWarning ? { warning: mediaWarning } : {})
     });
   } catch (err) {
     console.log('[handler] error:', err.message);
