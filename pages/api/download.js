@@ -101,240 +101,215 @@ function buildMediaList(media) {
   ];
 }
 
-async function fetchFromRapidApi(shortcode) {
-  if (!process.env.RAPIDAPI_KEY) {
-    console.log('[fetchFromRapidApi] skipped, no key set');
-    return null;
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+const PROVIDER_TIMEOUT_MS = 12000;
+const PROVIDER_MAX_ATTEMPTS = 2;
+
+async function requestProviderJson(url, options, provider) {
+  for (let attempt = 1; attempt <= PROVIDER_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS)
+      });
+      const body = await response.text();
+
+      console.log('[' + provider + '] status:', response.status);
+
+      if (!response.ok) {
+        console.log('[' + provider + '] body preview:', body.slice(0, 250));
+
+        const retryable =
+          response.status === 429 ||
+          [502, 503, 504].includes(response.status);
+
+        if (retryable && attempt < PROVIDER_MAX_ATTEMPTS) {
+          const retryAfterSeconds = Number(response.headers.get('retry-after'));
+          const retryDelay = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+            ? Math.min(retryAfterSeconds * 1000, 2000)
+            : 750;
+
+          console.log('[' + provider + '] retrying after temporary HTTP error');
+          await delay(retryDelay);
+          continue;
+        }
+
+        return {
+          json: null,
+          status: response.status,
+          temporarilyUnavailable: retryable
+        };
+      }
+
+      try {
+        return {
+          json: JSON.parse(body),
+          status: response.status,
+          temporarilyUnavailable: false
+        };
+      } catch {
+        console.log('[' + provider + '] response was not valid JSON');
+        return {
+          json: null,
+          status: response.status,
+          temporarilyUnavailable: false
+        };
+      }
+    } catch (error) {
+      console.log('[' + provider + '] request error:', error.message);
+
+      if (attempt < PROVIDER_MAX_ATTEMPTS) {
+        await delay(500);
+        continue;
+      }
+    }
   }
 
-  const response = await fetch('https://instagram120.p.rapidapi.com/api/instagram/mediaByShortcode', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-rapidapi-host': 'instagram120.p.rapidapi.com',
-      'x-rapidapi-key': process.env.RAPIDAPI_KEY
-    },
-    body: JSON.stringify({ shortcode })
-  });
+  return {
+    json: null,
+    status: 0,
+    temporarilyUnavailable: true
+  };
+}
 
-  const text = await response.text();
-  console.log('[fetchFromRapidApi] status:', response.status);
-  console.log('[fetchFromRapidApi] body preview:', text.slice(0, 300));
+function isHttpsMediaUrl(value) {
+  if (typeof value !== 'string' || !value.trim()) return false;
 
-  if (!response.ok) return null;
-
-  let json;
   try {
-    json = JSON.parse(text);
+    return new URL(value).protocol === 'https:';
   } catch {
-    return null;
+    return false;
   }
-
-  if (!Array.isArray(json) || json.length === 0) return null;
-
-  const items = json
-    .map((item) => {
-      const media = item.urls && item.urls[0];
-      if (!media || !media.url) return null;
-      const isVideo = media.extension === 'mp4';
-      return { type: isVideo ? 'video' : 'image', mediaUrl: media.url };
-    })
-    .filter(Boolean);
-
-  if (items.length === 0) return null;
-
-  const first = json[0] || {};
-  console.log('[fetchFromRapidApi] first item keys:', Object.keys(first));
-  console.log('[fetchFromRapidApi] meta field:', JSON.stringify(first.meta));
-  const username = sanitizeUsername(
-    first.owner?.username ||
-      first.username ||
-      first.author?.username ||
-      first.meta?.username ||
-      first.meta?.owner?.username ||
-      first.meta?.author?.username ||
-      first.meta?.user?.username ||
-      first.meta?.uploader ||
-      null
-  );
-  console.log('[fetchFromRapidApi] resolved username:', username);
-
-  return { username, items };
 }
 
 async function fetchFromSocialKit(url) {
-  if (!process.env.SOCIALKIT_ACCESS_KEY) {
+  const accessKey = process.env.SOCIALKIT_ACCESS_KEY;
+  if (!accessKey) {
     console.log('[fetchFromSocialKit] skipped, no access key set');
-    return null;
+    return { result: null, temporarilyUnavailable: false };
   }
 
-  const response = await fetch('https://api.socialkit.dev/instagram/download', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      access_key: process.env.SOCIALKIT_ACCESS_KEY,
-      url,
-      format: 'mp4',
-      quality: '720p'
-    })
-  });
-
-  const text = await response.text();
-  console.log('[fetchFromSocialKit] status:', response.status);
-  console.log('[fetchFromSocialKit] body preview:', text.slice(0, 300));
-
-  if (!response.ok) return null;
-
-  let json;
-  try {
-    json = JSON.parse(text);
-  } catch {
-    return null;
-  }
-
-  if (!json.success || !json.data || !json.data.downloadUrl) return null;
-
-  const username = sanitizeUsername(
-    json.data.username || json.data.author?.username || json.data.uploader || null
+  const response = await requestProviderJson(
+    'https://api.socialkit.dev/instagram/download',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-access-key': accessKey
+      },
+      body: JSON.stringify({
+        url,
+        format: 'mp4',
+        quality: '720p'
+      })
+    },
+    'fetchFromSocialKit'
   );
 
-  return { username, items: [{ type: 'video', mediaUrl: json.data.downloadUrl }] };
-}
+  const data = response.json?.data;
+  const downloadUrl = data?.downloadUrl;
 
-async function fetchFromGraphql(shortcode) {
-  const graphqlUrl = new URL('https://www.instagram.com/api/graphql');
-  graphqlUrl.searchParams.set('variables', JSON.stringify({ shortcode }));
-  graphqlUrl.searchParams.set('doc_id', '10015901848480474');
-  graphqlUrl.searchParams.set('lsd', 'AVqbxe3J_YA');
+  if (!response.json?.success || !isHttpsMediaUrl(downloadUrl)) {
+    if (response.json?.message) {
+      console.log('[fetchFromSocialKit] provider message:', response.json.message);
+    } else if (response.json?.error) {
+      console.log('[fetchFromSocialKit] provider error:', response.json.error);
+    } else {
+      console.log('[fetchFromSocialKit] no usable video URL returned');
+    }
 
-  const headers = {
-    'User-Agent': USER_AGENT,
-    'Content-Type': 'application/x-www-form-urlencoded',
-    'X-IG-App-ID': '936619743392459',
-    'X-FB-LSD': 'AVqbxe3J_YA',
-    'X-ASBD-ID': '129477',
-    'Sec-Fetch-Site': 'same-origin'
+    return {
+      result: null,
+      temporarilyUnavailable: response.temporarilyUnavailable
+    };
+  }
+
+  const username = sanitizeUsername(
+    data.username ||
+    data.author?.username ||
+    data.uploader ||
+    null
+  );
+
+  return {
+    result: {
+      username,
+      items: [{ type: 'video', mediaUrl: downloadUrl }]
+    },
+    temporarilyUnavailable: false
   };
-
-  if (process.env.INSTAGRAM_SESSIONID) {
-    headers['Cookie'] = `sessionid=${process.env.INSTAGRAM_SESSIONID}`;
-  }
-
-  const response = await fetch(graphqlUrl.toString(), { method: 'POST', headers });
-  const text = await response.text();
-
-  console.log('[fetchFromGraphql] status:', response.status);
-  console.log('[fetchFromGraphql] body preview:', text.slice(0, 300));
-
-  if (!response.ok) return null;
-
-  if (text.trim().startsWith('<')) {
-    console.log('[fetchFromGraphql] got HTML instead of JSON — request was blocked/rejected by Instagram');
-    return null;
-  }
-
-  let json;
-  try {
-    json = JSON.parse(text);
-  } catch {
-    return null;
-  }
-
-  const media = json?.data?.xdt_shortcode_media;
-  if (!media) return null;
-
-  const items = buildMediaList(media);
-  if (items.length === 0) return null;
-
-  const username = sanitizeUsername(media.owner?.username);
-
-  return { username, items };
 }
 
-async function fetchFromMagicParams(shortcode) {
-  if (!process.env.INSTAGRAM_SESSIONID) {
-    console.log('[fetchFromMagicParams] skipped, no sessionid set');
-    return null;
+// Fallback for public single-photo posts and video URLs when the download
+// endpoint is temporarily unavailable. SocialKit documents thumbnail URLs
+// for photos/carousels and videoUrl for videos. Carousel children are not
+// exposed by this endpoint, so we do not pretend the cover is every slide.
+async function fetchFromSocialKitStats(url) {
+  const accessKey = process.env.SOCIALKIT_ACCESS_KEY;
+  if (!accessKey) {
+    console.log('[fetchFromSocialKitStats] skipped, no access key set');
+    return { result: null, temporarilyUnavailable: false };
   }
 
-  const apiUrl = `https://www.instagram.com/p/${shortcode}?__a=1&__d=dis`;
+  const endpoint = new URL('https://api.socialkit.dev/instagram/stats');
+  endpoint.searchParams.set('url', url);
 
-  const response = await fetch(apiUrl, {
-    headers: {
-      'User-Agent': USER_AGENT,
-      'X-IG-App-ID': '936619743392459',
-      'Sec-Fetch-Site': 'same-origin',
-      Cookie: `sessionid=${process.env.INSTAGRAM_SESSIONID}`
-    }
-  });
+  const response = await requestProviderJson(
+    endpoint.toString(),
+    {
+      method: 'GET',
+      headers: { 'x-access-key': accessKey }
+    },
+    'fetchFromSocialKitStats'
+  );
 
-  const text = await response.text();
-
-  console.log('[fetchFromMagicParams] status:', response.status);
-  console.log('[fetchFromMagicParams] body preview:', text.slice(0, 300));
-
-  if (!response.ok) return null;
-
-  let json;
-  try {
-    json = JSON.parse(text);
-  } catch {
-    return null;
+  const data = response.json?.data;
+  if (!response.json?.success || !data) {
+    return {
+      result: null,
+      temporarilyUnavailable: response.temporarilyUnavailable
+    };
   }
 
-  const item = json?.items?.[0];
-  if (!item) return null;
-
-  const username = sanitizeUsername(item.user?.username);
-
-  if (item.product_type === 'carousel_container' && item.carousel_media) {
-    const items = item.carousel_media
-      .map((m) => {
-        if (m.video_versions && m.video_versions.length > 0) {
-          return { type: 'video', mediaUrl: m.video_versions[0].url };
-        }
-        const best = m.image_versions2 && m.image_versions2.candidates && m.image_versions2.candidates[0];
-        return best ? { type: 'image', mediaUrl: best.url } : null;
-      })
-      .filter(Boolean);
-    return items.length > 0 ? { username, items } : null;
+  if (data.contentType === 'carousel') {
+    console.log('[fetchFromSocialKitStats] carousel detected; API only documents the cover thumbnail');
+    return {
+      result: null,
+      temporarilyUnavailable: false,
+      unsupportedCarousel: true
+    };
   }
 
-  if (item.video_versions && item.video_versions.length > 0) {
-    return { username, items: [{ type: 'video', mediaUrl: item.video_versions[0].url }] };
+  const username = sanitizeUsername(data.author || data.username || null);
+
+  if (data.isVideo === true && isHttpsMediaUrl(data.videoUrl)) {
+    return {
+      result: {
+        username,
+        items: [{ type: 'video', mediaUrl: data.videoUrl }]
+      },
+      temporarilyUnavailable: false
+    };
   }
 
-  const best = item.image_versions2 && item.image_versions2.candidates && item.image_versions2.candidates[0];
-  return best ? { username, items: [{ type: 'image', mediaUrl: best.url }] } : null;
-}
-
-async function resolveUsernameFallback(shortcode) {
-  console.log('[resolveUsernameFallback] trying graphql for shortcode:', shortcode);
-  try {
-    const graphqlResult = await fetchFromGraphql(shortcode);
-    if (graphqlResult && graphqlResult.username) {
-      console.log('[resolveUsernameFallback] got username from graphql:', graphqlResult.username);
-      return graphqlResult.username;
-    }
-    console.log('[resolveUsernameFallback] graphql returned no username');
-  } catch (err) {
-    console.log('[resolveUsernameFallback] graphql error:', err.message);
+  if (data.isVideo === false && isHttpsMediaUrl(data.thumbnail)) {
+    return {
+      result: {
+        username,
+        items: [{ type: 'image', mediaUrl: data.thumbnail }]
+      },
+      temporarilyUnavailable: false
+    };
   }
 
-  console.log('[resolveUsernameFallback] trying magicParams for shortcode:', shortcode);
-  try {
-    const magicResult = await fetchFromMagicParams(shortcode);
-    if (magicResult && magicResult.username) {
-      console.log('[resolveUsernameFallback] got username from magicParams:', magicResult.username);
-      return magicResult.username;
-    }
-    console.log('[resolveUsernameFallback] magicParams returned no username');
-  } catch (err) {
-    console.log('[resolveUsernameFallback] magicParams error:', err.message);
-  }
-
-  console.log('[resolveUsernameFallback] all sources failed, no username resolved');
-  return null;
+  console.log('[fetchFromSocialKitStats] no supported media URL in response');
+  return {
+    result: null,
+    temporarilyUnavailable: false
+  };
 }
 
 export default async function handler(req, res) {
@@ -359,8 +334,20 @@ export default async function handler(req, res) {
 
   const { url } = req.body || {};
 
-  if (!url || !url.includes('instagram.com')) {
+  if (typeof url !== 'string' || !url.trim()) {
     return res.status(400).json({ error: 'Invalid Instagram URL' });
+  }
+
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    return res.status(400).json({ error: 'Invalid Instagram URL' });
+  }
+
+  const allowedHosts = ['instagram.com', 'www.instagram.com', 'm.instagram.com'];
+  if (!allowedHosts.includes(parsedUrl.hostname.toLowerCase())) {
+    return res.status(400).json({ error: 'Please enter a valid Instagram post URL' });
   }
 
   const shortcode = extractShortcode(url);
@@ -370,36 +357,40 @@ export default async function handler(req, res) {
   }
 
   console.log('[handler] shortcode:', shortcode);
-  console.log('[handler] rapidapi key set:', Boolean(process.env.RAPIDAPI_KEY));
   console.log('[handler] socialkit key set:', Boolean(process.env.SOCIALKIT_ACCESS_KEY));
-  console.log('[handler] sessionid set:', Boolean(process.env.INSTAGRAM_SESSIONID));
 
   try {
-    let result = await fetchFromRapidApi(shortcode);
+    const downloadResponse = await fetchFromSocialKit(url);
+    let result = downloadResponse.result;
+    let providerUnavailable = downloadResponse.temporarilyUnavailable;
+    let unsupportedCarousel = false;
 
-    if (!result || !result.items || result.items.length === 0) {
-      result = await fetchFromSocialKit(url);
+    if (!result) {
+      const statsResponse = await fetchFromSocialKitStats(url);
+      result = statsResponse.result;
+      providerUnavailable = providerUnavailable || statsResponse.temporarilyUnavailable;
+      unsupportedCarousel = statsResponse.unsupportedCarousel === true;
     }
 
     if (!result || !result.items || result.items.length === 0) {
-      result = await fetchFromGraphql(shortcode);
-    }
+      if (unsupportedCarousel) {
+        return res.status(422).json({
+          error: 'This provider currently returns only a carousel cover image, not every slide. Try a single photo or video post instead.'
+        });
+      }
 
-    if (!result || !result.items || result.items.length === 0) {
-      result = await fetchFromMagicParams(shortcode);
-    }
+      if (providerUnavailable) {
+        return res.status(503).json({
+          error: 'The Instagram media service is temporarily unavailable. Please try again in a minute.'
+        });
+      }
 
-    if (!result || !result.items || result.items.length === 0) {
       return res.status(404).json({
-        error: 'Media not found. Check the terminal log for details on why.'
+        error: 'Media could not be found. Make sure the post is public and the link is still available.'
       });
     }
 
-    const baseName =
-      result.username ||
-      extractUsernameFromUrl(url) ||
-      (await resolveUsernameFallback(shortcode)) ||
-      'instagram';
+    const baseName = result.username || extractUsernameFromUrl(url) || 'instagram';
     console.log('[handler] final baseName used for filename:', baseName);
     const items = result.items.map((item) => ({
       ...item,
