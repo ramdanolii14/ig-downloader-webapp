@@ -453,6 +453,9 @@ function collectionExpectedCount(post) {
   if (Array.isArray(collection?.items)) {
     return collection.items.length;
   }
+  if (Array.isArray(collection?.images)) {
+    return collection.images.length;
+  }
   return 0;
 }
 
@@ -560,12 +563,15 @@ export default async function handler(req, res) {
     const baseName = result.username || extractUsernameFromUrl(url) || 'instagram';
     console.log('[handler] final baseName used for filename:', baseName);
     const isCarousel = result.items.length > 1;
-    const items = result.items.map((item, index) => ({
-      ...item,
-      filename: isCarousel
-        ? baseName + '-' + String(index + 1).padStart(2, '0')
-        : baseName
-    }));
+    const items = result.items.map((item, index) => {
+      const slideNumber = item.position || index + 1;
+      return {
+        ...item,
+        filename: isCarousel
+          ? baseName + '-' + String(slideNumber).padStart(2, '0')
+          : baseName
+      };
+    });
 
     return res.status(200).json({
       items,
