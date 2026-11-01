@@ -300,11 +300,11 @@ export default function Home() {
             <div className="results-grid">
               {items.map((item, index) => (
                 <article className="frame-card" key={index}>
-                  <span className="frame-number">F{String(index + 1).padStart(2, '0')}</span>
+                  <span className="frame-number">F{String(item.position || index + 1).padStart(2, '0')}</span>
                   {item.type === 'video' ? (
                     <video src={item.mediaUrl} controls />
                   ) : (
-                    <img src={item.mediaUrl} alt={`Instagram media number ${index + 1}`} />
+                    <img src={item.mediaUrl} alt={`Instagram media number ${item.position || index + 1}`} />
                   )}
                   <a
                     href={`/api/proxy?url=${encodeURIComponent(item.mediaUrl)}&name=${encodeURIComponent(
