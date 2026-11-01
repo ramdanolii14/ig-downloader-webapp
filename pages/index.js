@@ -4,8 +4,8 @@ import Head from 'next/head';
 const FEATURES = [
   {
     tag: '[format]',
-    title: 'All formats supported',
-    body: 'Download photos, videos, reels, IGTV, and carousels from public Instagram posts. All content types are supported as long as the post is public.'
+    title: 'Public photos and videos',
+    body: 'Download single-photo posts and public videos, Reels, or IGTV. Multi-photo carousels are not currently supported by the available provider.'
   },
   {
     tag: '[resolution]',
@@ -57,14 +57,14 @@ const STEPS = [
   }
 ];
 
-const FORMATS = ['Single Photo', 'Multi-Photo Carousel', 'Video Feed', 'Reels', 'IGTV', 'Public Profile Photo'];
+const FORMATS = ['Single Photo', 'Video Feed', 'Reels', 'IGTV'];
 
 const SITE_URL = 'https://igdownloader.example.com';
 const SITE_NAME = 'IG Downloader';
 const PAGE_TITLE =
   'IG Downloader - Instagram Downloader Free | Download Foto, Video & Reels Instagram Tanpa Watermark';
 const PAGE_DESCRIPTION =
-  'IG Downloader adalah instagram downloader gratis untuk download foto, video, reels, IGTV, dan carousel dari postingan publik Instagram. Tanpa login, tanpa watermark, kualitas original, bisa dipakai di HP maupun laptop.';
+  'IG Downloader adalah instagram downloader gratis untuk download foto tunggal, video, reels, dan IGTV dari postingan publik Instagram. Tanpa login, tanpa watermark, bisa dipakai di HP maupun laptop.';
 const OG_IMAGE = `${SITE_URL}/og-image.jpg`;
 
 const FAQS = [
@@ -90,7 +90,7 @@ const FAQS = [
   },
   {
     q: 'Can I download multiple photos at once from a carousel?',
-    a: 'Yes. If the post contains multiple photos or videos in a single carousel, all of them will be displayed and can be saved one by one.'
+    a: 'Multi-photo carousels are not currently supported. The available provider does not expose every slide, so use a single-photo post or a video/Reel instead.'
   },
   {
     q: 'Can this page be used on mobile devices?',
