@@ -79,6 +79,60 @@ function sanitizeUsername(name) {
   return cleaned.length > 0 ? cleaned : null;
 }
 
+function extractUsernameFromProfileUrl(value) {
+  if (typeof value !== 'string' || !value.trim()) return null;
+
+  try {
+    const parsed = new URL(value);
+    const allowedHosts = ['instagram.com', 'www.instagram.com', 'm.instagram.com'];
+    if (!allowedHosts.includes(parsed.hostname.toLowerCase())) return null;
+
+    const segments = parsed.pathname.split('/').filter(Boolean);
+    if (segments.length !== 1) return null;
+
+    const candidate = segments[0];
+    const reserved = ['p', 'reel', 'reels', 'tv', 'stories', 'explore', 'accounts'];
+    if (reserved.includes(candidate.toLowerCase())) return null;
+
+    return sanitizeUsername(candidate);
+  } catch {
+    return null;
+  }
+}
+
+function resolveProviderUsername(data) {
+  if (!data || typeof data !== 'object') return null;
+
+  const author = typeof data.author === 'string'
+    ? data.author
+    : data.author?.username;
+
+  const candidates = [
+    data.username,
+    author,
+    data.author?.username,
+    data.owner?.username,
+    data.user?.username,
+    data.creator?.username,
+    data.uploader
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string' || /^https?:\/\//i.test(candidate)) continue;
+    const username = sanitizeUsername(candidate);
+    if (username) return username;
+  }
+
+  return extractUsernameFromProfileUrl(
+    data.authorLink ||
+    data.profileUrl ||
+    data.author?.url ||
+    data.owner?.profileUrl ||
+    data.owner?.url ||
+    null
+  );
+}
+
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -205,12 +259,7 @@ async function fetchFromSocialKit(url) {
     };
   }
 
-  const username = sanitizeUsername(
-    data.username ||
-    data.author?.username ||
-    data.uploader ||
-    null
-  );
+  const username = resolveProviderUsername(data);
 
   return {
     result: {
@@ -262,10 +311,11 @@ async function fetchFromSocialKitStats(url) {
     };
   }
 
-  const username = sanitizeUsername(data.author || data.username || null);
+  const username = resolveProviderUsername(data);
 
   if (data.isVideo === true && isHttpsMediaUrl(data.videoUrl)) {
     return {
+      username,
       result: {
         username,
         items: [{ type: 'video', mediaUrl: data.videoUrl }]
@@ -276,6 +326,7 @@ async function fetchFromSocialKitStats(url) {
 
   if (data.isVideo === false && isHttpsMediaUrl(data.thumbnail)) {
     return {
+      username,
       result: {
         username,
         items: [{ type: 'image', mediaUrl: data.thumbnail }]
@@ -515,9 +566,22 @@ export default async function handler(req, res) {
     let providerUnavailable = downloadResponse.temporarilyUnavailable;
     let unsupportedCarousel = false;
     let mediaWarning = null;
+    let statsResponse = null;
+
+    // A successful download response may contain the media URL but omit the
+    // creator username. Resolve the name from post metadata before using the
+    // generic filename fallback.
+    if (result && !result.username) {
+      statsResponse = await fetchFromSocialKitStats(url);
+      const resolvedUsername = statsResponse.username || statsResponse.result?.username || null;
+
+      if (resolvedUsername) {
+        result = { ...result, username: resolvedUsername };
+      }
+    }
 
     if (!result) {
-      const statsResponse = await fetchFromSocialKitStats(url);
+      statsResponse = statsResponse || await fetchFromSocialKitStats(url);
       result = statsResponse.result;
       providerUnavailable = providerUnavailable || statsResponse.temporarilyUnavailable;
       unsupportedCarousel = statsResponse.unsupportedCarousel === true;
@@ -563,7 +627,10 @@ export default async function handler(req, res) {
       });
     }
 
-    const baseName = result.username || extractUsernameFromUrl(url) || 'instagram';
+    const baseName =
+      result.username ||
+      extractUsernameFromUrl(url) ||
+      'instagram-' + shortcode;
     console.log('[handler] final baseName used for filename:', baseName);
     const isCarousel = result.items.length > 1;
     const items = result.items.map((item, index) => {
