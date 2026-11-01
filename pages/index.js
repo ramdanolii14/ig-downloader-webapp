@@ -4,8 +4,8 @@ import Head from 'next/head';
 const FEATURES = [
   {
     tag: '[format]',
-    title: 'Public photos and videos',
-    body: 'Download single-photo posts and public videos, Reels, or IGTV. Multi-photo carousels are not currently supported by the available provider.'
+    title: 'Photos, videos, and carousels',
+    body: 'Download public single photos, videos, Reels, IGTV, and available image slides from carousel posts.'
   },
   {
     tag: '[resolution]',
@@ -57,14 +57,14 @@ const STEPS = [
   }
 ];
 
-const FORMATS = ['Single Photo', 'Video Feed', 'Reels', 'IGTV'];
+const FORMATS = ['Single Photo', 'Multi-Photo Carousel', 'Video Feed', 'Reels', 'IGTV'];
 
 const SITE_URL = 'https://igdownloader.example.com';
 const SITE_NAME = 'IG Downloader';
 const PAGE_TITLE =
   'IG Downloader - Instagram Downloader Free | Download Foto, Video & Reels Instagram Tanpa Watermark';
 const PAGE_DESCRIPTION =
-  'IG Downloader adalah instagram downloader gratis untuk download foto tunggal, video, reels, dan IGTV dari postingan publik Instagram. Tanpa login, tanpa watermark, bisa dipakai di HP maupun laptop.';
+  'IG Downloader adalah instagram downloader gratis untuk download foto tunggal, slide gambar carousel, video, reels, dan IGTV dari postingan publik Instagram. Tanpa login, tanpa watermark, bisa dipakai di HP maupun laptop.';
 const OG_IMAGE = `${SITE_URL}/og-image.jpg`;
 
 const FAQS = [
@@ -90,7 +90,7 @@ const FAQS = [
   },
   {
     q: 'Can I download multiple photos at once from a carousel?',
-    a: 'Multi-photo carousels are not currently supported. The available provider does not expose every slide, so use a single-photo post or a video/Reel instead.'
+    a: 'Yes. The tool retrieves available image slides from public carousel posts. Instagram may withhold some images, and video items inside mixed carousels are not currently included.'
   },
   {
     q: 'Can this page be used on mobile devices?',
@@ -102,6 +102,7 @@ export default function Home() {
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [warning, setWarning] = useState('');
   const [items, setItems] = useState(null);
   const [cooldown, setCooldown] = useState(0);
 
@@ -119,6 +120,7 @@ export default function Home() {
     if (loading || cooldown > 0) return;
 
     setError('');
+    setWarning('');
     setItems(null);
     setLoading(true);
 
@@ -139,6 +141,7 @@ export default function Home() {
         setError(data.error || 'Something went wrong');
       } else {
         setItems(data.items);
+        setWarning(data.warning || '');
         setCooldown(2); // small cooldown after a successful fetch too
       }
     } catch (err) {
@@ -280,6 +283,11 @@ export default function Home() {
           {error && (
             <p className="error" role="alert">
               {error}
+            </p>
+          )}
+          {warning && (
+            <p className="error" role="status">
+              {warning}
             </p>
           )}
         </section>
