@@ -485,7 +485,7 @@ async function fetchFromInScrape(url, shortcode) {
   );
 
   const payload = response.json;
-  if (!response.ok && response.status) {
+  if (response.status >= 400 || response.status === 0) {
     console.log('[fetchFromInScrape] HTTP request failed:', response.status);
     return {
       result: null,
@@ -786,6 +786,7 @@ export default async function handler(req, res) {
     let providerUnavailable = downloadResponse.temporarilyUnavailable;
     let providerError = downloadResponse.providerError === true;
     let retryAfterSeconds = downloadResponse.retryAfterSeconds || null;
+    let alternateProviderConfigured = false;
     let unsupportedCarousel = false;
     let mediaWarning = null;
     let statsResponse = null;
@@ -808,6 +809,7 @@ export default async function handler(req, res) {
       // an unavailable result. This provider is optional and only called
       // after the primary download endpoint has failed.
       const alternateResponse = await fetchFromInScrape(url, shortcode);
+      alternateProviderConfigured = alternateResponse.configured === true;
       result = alternateResponse.result;
       providerUnavailable = providerUnavailable || alternateResponse.temporarilyUnavailable;
       providerError = providerError || alternateResponse.providerError === true;
@@ -865,8 +867,12 @@ export default async function handler(req, res) {
 
       if (providerError) {
         return res.status(502).json({
-          error: 'The media provider could not verify or extract this post. The link may still be public and available. Please retry later.',
-          code: 'instagram_provider_error'
+          error: alternateProviderConfigured
+            ? 'The media providers could not extract this post. The link may still be public and available. Please retry later.'
+            : 'SocialKit could not access this post. Configure INSCRAPE_API_KEY in your deployment environment to enable the independent media fallback.',
+          code: alternateProviderConfigured
+            ? 'instagram_provider_error'
+            : 'alternate_provider_not_configured'
         });
       }
 
