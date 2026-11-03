@@ -133,6 +133,53 @@ function resolveProviderUsername(data) {
   );
 }
 
+function getProviderErrorCode(payload) {
+  return String(
+    payload?.errorCode ||
+    payload?.code ||
+    payload?.error?.code ||
+    payload?.data?.errorCode ||
+    ''
+  ).toLowerCase();
+}
+
+function isTemporaryProviderFailure(payload, status = 0) {
+  if (status === 429 || status >= 500) return true;
+  if (payload?.retryable === true || payload?.data?.retryable === true) return true;
+
+  const code = getProviderErrorCode(payload);
+  if (
+    code.includes('temporary') ||
+    code.includes('temporarily') ||
+    code.includes('extraction_failed') ||
+    code.includes('upstream_blocked') ||
+    code.includes('upstream_unavailable') ||
+    code.includes('timeout') ||
+    code.includes('rate_limit')
+  ) {
+    return true;
+  }
+
+  const message = String(payload?.message || payload?.error?.message || '').toLowerCase();
+  return (
+    message.includes('try again later') ||
+    message.includes('retry later') ||
+    message.includes('temporarily unavailable') ||
+    message.includes('couldn’t complete this request') ||
+    message.includes("couldn't complete this request") ||
+    message.includes('upstream unavailable') ||
+    message.includes('timed out')
+  );
+}
+
+function isProviderFailure(payload) {
+  return Boolean(
+    payload &&
+    typeof payload === 'object' &&
+    (payload.success === false || payload.error || payload.code || payload.errorCode)
+  );
+}
+
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -151,45 +198,64 @@ async function requestProviderJson(url, options, provider) {
 
       console.log('[' + provider + '] status:', response.status);
 
+      let json = null;
+      try {
+        json = JSON.parse(body);
+      } catch {
+        // Keep the raw HTTP status when an upstream proxy returns HTML or text.
+      }
+
+      const retryable = isTemporaryProviderFailure(json, response.status);
+      const retryAfterSeconds = Number(response.headers.get('retry-after'));
+
       if (!response.ok) {
         console.log('[' + provider + '] body preview:', body.slice(0, 250));
 
-        const retryable =
-          response.status === 429 ||
-          [500, 502, 503, 504].includes(response.status);
+        // Do not rapidly retry Instagram extraction failures. SocialKit asks
+        // clients to wait on temporary 503 responses; return the typed failure
+        // to our caller instead of converting it into a false "not found".
+        const safeToRetryImmediately =
+          response.status === 502 ||
+          response.status === 504;
 
-        if (retryable && attempt < PROVIDER_MAX_ATTEMPTS) {
-          const retryAfterSeconds = Number(response.headers.get('retry-after'));
-          const retryDelay = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
-            ? Math.min(retryAfterSeconds * 1000, 2000)
-            : 750;
-
-          console.log('[' + provider + '] retrying after temporary HTTP error');
-          await delay(retryDelay);
+        if (safeToRetryImmediately && attempt < PROVIDER_MAX_ATTEMPTS) {
+          console.log('[' + provider + '] retrying after transient gateway error');
+          await delay(750);
           continue;
         }
 
         return {
-          json: null,
+          json,
           status: response.status,
-          temporarilyUnavailable: retryable
+          temporarilyUnavailable: retryable,
+          providerError: true,
+          retryAfterSeconds: Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : null
         };
       }
 
-      try {
-        return {
-          json: JSON.parse(body),
-          status: response.status,
-          temporarilyUnavailable: false
-        };
-      } catch {
+      if (json === null) {
         console.log('[' + provider + '] response was not valid JSON');
         return {
           json: null,
           status: response.status,
-          temporarilyUnavailable: false
+          temporarilyUnavailable: false,
+          providerError: true
         };
       }
+
+      const apiFailure = isProviderFailure(json);
+      const apiTemporarilyUnavailable = isTemporaryProviderFailure(json, response.status);
+
+      if (apiFailure) {
+        console.log('[' + provider + '] API reported failure:', getProviderErrorCode(json) || 'unclassified');
+      }
+
+      return {
+        json,
+        status: response.status,
+        temporarilyUnavailable: apiTemporarilyUnavailable,
+        providerError: apiFailure
+      };
     } catch (error) {
       console.log('[' + provider + '] request error:', error.message);
 
@@ -221,7 +287,7 @@ async function fetchFromSocialKit(url) {
   const accessKey = process.env.SOCIALKIT_ACCESS_KEY;
   if (!accessKey) {
     console.log('[fetchFromSocialKit] skipped, no access key set');
-    return { result: null, temporarilyUnavailable: false };
+    return { result: null, temporarilyUnavailable: false, providerError: true };
   }
 
   const response = await requestProviderJson(
@@ -233,6 +299,7 @@ async function fetchFromSocialKit(url) {
         'x-access-key': accessKey
       },
       body: JSON.stringify({
+        access_key: accessKey,
         url,
         format: 'mp4',
         quality: '720p'
@@ -255,7 +322,9 @@ async function fetchFromSocialKit(url) {
 
     return {
       result: null,
-      temporarilyUnavailable: response.temporarilyUnavailable
+      temporarilyUnavailable: response.temporarilyUnavailable,
+      providerError: true,
+      retryAfterSeconds: response.retryAfterSeconds || null
     };
   }
 
@@ -297,7 +366,9 @@ async function fetchFromSocialKitStats(url) {
   if (!response.json?.success || !data) {
     return {
       result: null,
-      temporarilyUnavailable: response.temporarilyUnavailable
+      temporarilyUnavailable: response.temporarilyUnavailable,
+      providerError: true,
+      retryAfterSeconds: response.retryAfterSeconds || null
     };
   }
 
@@ -338,7 +409,8 @@ async function fetchFromSocialKitStats(url) {
   console.log('[fetchFromSocialKitStats] no supported media URL in response');
   return {
     result: null,
-    temporarilyUnavailable: false
+    temporarilyUnavailable: false,
+    providerError: true
   };
 }
 
@@ -564,6 +636,8 @@ export default async function handler(req, res) {
     const downloadResponse = await fetchFromSocialKit(url);
     let result = downloadResponse.result;
     let providerUnavailable = downloadResponse.temporarilyUnavailable;
+    let providerError = downloadResponse.providerError === true;
+    let retryAfterSeconds = downloadResponse.retryAfterSeconds || null;
     let unsupportedCarousel = false;
     let mediaWarning = null;
     let statsResponse = null;
@@ -584,6 +658,8 @@ export default async function handler(req, res) {
       statsResponse = statsResponse || await fetchFromSocialKitStats(url);
       result = statsResponse.result;
       providerUnavailable = providerUnavailable || statsResponse.temporarilyUnavailable;
+      providerError = providerError || statsResponse.providerError === true;
+      retryAfterSeconds = retryAfterSeconds || statsResponse.retryAfterSeconds || null;
       unsupportedCarousel = statsResponse.unsupportedCarousel === true;
 
       if (unsupportedCarousel) {
@@ -593,6 +669,7 @@ export default async function handler(req, res) {
         );
         result = carouselResponse.result;
         providerUnavailable = providerUnavailable || carouselResponse.temporarilyUnavailable;
+        providerError = providerError || carouselResponse.providerError === true;
         if (carouselResponse.partial) {
           mediaWarning = 'Some carousel images are unavailable. The displayed files are all images currently provided by Instagram.';
         }
@@ -617,13 +694,25 @@ export default async function handler(req, res) {
       }
 
       if (providerUnavailable) {
+        if (retryAfterSeconds && retryAfterSeconds > 0) {
+          res.setHeader('Retry-After', String(Math.ceil(retryAfterSeconds)));
+        }
         return res.status(503).json({
-          error: 'The Instagram media service is temporarily unavailable. Please try again in a minute.'
+          error: 'Instagram could not extract this media right now. This does not mean the public post is missing. Please try again later.',
+          code: 'instagram_temporarily_unavailable'
         });
       }
 
-      return res.status(404).json({
-        error: 'Media could not be found. Make sure the post is public and the link is still available.'
+      if (providerError) {
+        return res.status(502).json({
+          error: 'The media provider could not verify or extract this post. The link may still be public and available. Please retry later.',
+          code: 'instagram_provider_error'
+        });
+      }
+
+      return res.status(502).json({
+        error: 'Instagram returned no usable media data. The post was not confirmed as missing or private.',
+        code: 'instagram_unverified_response'
       });
     }
 
