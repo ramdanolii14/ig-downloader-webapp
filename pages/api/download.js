@@ -376,7 +376,7 @@ async function fetchFromSocialKitStats(url) {
     console.log('[fetchFromSocialKitStats] carousel detected; resolving all available image slides from channel-posts');
     return {
       result: null,
-      username: sanitizeUsername(data.author || data.username || null),
+      username: resolveProviderUsername(data),
       temporarilyUnavailable: false,
       unsupportedCarousel: true
     };
@@ -529,7 +529,13 @@ async function fetchCarouselFromSocialKit(username, shortcode) {
         response.status === 429;
 
       console.log('[fetchFromSocialKitChannelPosts] failed to retrieve profile page', page);
-      break;
+      return {
+        result: null,
+        temporarilyUnavailable: providerUnavailable,
+        providerError: true,
+        retryAfterSeconds: response.retryAfterSeconds || null,
+        notFound: false
+      };
     }
 
     const data = response.json.data || {};
