@@ -414,6 +414,148 @@ async function fetchFromSocialKitStats(url) {
   };
 }
 
+function getInScrapeItemUrl(item, keys) {
+  if (!item || typeof item !== 'object') return null;
+
+  for (const key of keys) {
+    if (isHttpsMediaUrl(item[key])) return item[key];
+  }
+
+  return null;
+}
+
+function normalizeInScrapeMediaItem(item) {
+  if (!item || typeof item !== 'object') return null;
+
+  const videoUrl =
+    getInScrapeItemUrl(item, ['videoUrl', 'video_url', 'video']) ||
+    getInScrapeItemUrl(item.video_versions?.[0], ['url']) ||
+    getInScrapeItemUrl(item.videoVersions?.[0], ['url']);
+
+  if (videoUrl) {
+    return { type: 'video', mediaUrl: videoUrl };
+  }
+
+  const imageUrl =
+    getInScrapeItemUrl(item, ['url', 'imageUrl', 'image_url', 'display_url', 'displayUrl']) ||
+    getInScrapeItemUrl(item.image_versions2?.candidates?.[0], ['url']) ||
+    getInScrapeItemUrl(item.imageVersions2?.candidates?.[0], ['url']);
+
+  return imageUrl ? { type: 'image', mediaUrl: imageUrl } : null;
+}
+
+function buildInScrapeMediaItems(post) {
+  const carousel = Array.isArray(post?.carouselMedia) ? post.carouselMedia : [];
+  const firstMedia = Array.isArray(post?.firstMedia) ? post.firstMedia : [];
+
+  const entries = carousel.length > 0 ? carousel : firstMedia;
+  const items = entries.map(normalizeInScrapeMediaItem).filter(Boolean);
+
+  // Some responses expose the first media as a single object instead of an array.
+  if (items.length === 0 && post?.firstMedia && !Array.isArray(post.firstMedia)) {
+    const single = normalizeInScrapeMediaItem(post.firstMedia);
+    if (single) items.push(single);
+  }
+
+  return items;
+}
+
+async function fetchFromInScrape(url, shortcode) {
+  const apiKey = process.env.INSCRAPE_API_KEY;
+  if (!apiKey) {
+    console.log('[fetchFromInScrape] skipped, no API key set');
+    return {
+      result: null,
+      configured: false,
+      temporarilyUnavailable: false,
+      providerError: false
+    };
+  }
+
+  const endpoint = new URL('https://api.inscrape.dev/v1/instagram/post');
+  endpoint.searchParams.set('url', url);
+
+  const response = await requestProviderJson(
+    endpoint.toString(),
+    {
+      method: 'GET',
+      headers: { 'x-api-key': apiKey }
+    },
+    'fetchFromInScrape'
+  );
+
+  const payload = response.json;
+  if (!response.ok && response.status) {
+    console.log('[fetchFromInScrape] HTTP request failed:', response.status);
+    return {
+      result: null,
+      configured: true,
+      temporarilyUnavailable: response.temporarilyUnavailable,
+      providerError: true,
+      retryAfterSeconds: response.retryAfterSeconds || null
+    };
+  }
+
+  if (!payload?.success) {
+    console.log('[fetchFromInScrape] provider returned an unsuccessful response');
+    return {
+      result: null,
+      configured: true,
+      temporarilyUnavailable: response.temporarilyUnavailable,
+      providerError: true,
+      retryAfterSeconds: response.retryAfterSeconds || null
+    };
+  }
+
+  const mediaList = Array.isArray(payload.data?.media) ? payload.data.media : [];
+  const target = mediaList.find((post) => {
+    const candidate = post?.shortCode || post?.shortcode;
+    if (candidate && candidate === shortcode) return true;
+
+    const postLink = post?.postLink || post?.url;
+    return typeof postLink === 'string' && extractShortcode(postLink) === shortcode;
+  }) || (mediaList.length === 1 ? mediaList[0] : null);
+
+  if (!target) {
+    console.log('[fetchFromInScrape] no matching media object returned');
+    return {
+      result: null,
+      configured: true,
+      temporarilyUnavailable: false,
+      providerError: false,
+      postNotFound: true
+    };
+  }
+
+  const items = buildInScrapeMediaItems(target);
+  if (items.length === 0) {
+    console.log('[fetchFromInScrape] matching post returned no usable media URLs');
+    return {
+      result: null,
+      configured: true,
+      temporarilyUnavailable: false,
+      providerError: false,
+      noMedia: true
+    };
+  }
+
+  const username = sanitizeUsername(
+    target.owner?.username ||
+    target.user?.username ||
+    target.username ||
+    null
+  );
+
+  console.log('[fetchFromInScrape] media found:', items.length);
+
+  return {
+    result: { username, items },
+    configured: true,
+    temporarilyUnavailable: false,
+    providerError: false
+  };
+}
+
 function readImageUrl(entry, depth = 0) {
   if (typeof entry === 'string') return isHttpsMediaUrl(entry) ? entry : null;
   if (!entry || typeof entry !== 'object' || depth > 3) return null;
@@ -661,14 +803,26 @@ export default async function handler(req, res) {
     }
 
     if (!result) {
-      statsResponse = statsResponse || await fetchFromSocialKitStats(url);
-      result = statsResponse.result;
-      providerUnavailable = providerUnavailable || statsResponse.temporarilyUnavailable;
-      providerError = providerError || statsResponse.providerError === true;
-      retryAfterSeconds = retryAfterSeconds || statsResponse.retryAfterSeconds || null;
-      unsupportedCarousel = statsResponse.unsupportedCarousel === true;
+      // SocialKit can reject a post even when it is publicly viewable.
+      // Try the independent post-by-URL provider before treating that as
+      // an unavailable result. This provider is optional and only called
+      // after the primary download endpoint has failed.
+      const alternateResponse = await fetchFromInScrape(url, shortcode);
+      result = alternateResponse.result;
+      providerUnavailable = providerUnavailable || alternateResponse.temporarilyUnavailable;
+      providerError = providerError || alternateResponse.providerError === true;
+      retryAfterSeconds = retryAfterSeconds || alternateResponse.retryAfterSeconds || null;
 
-      if (unsupportedCarousel) {
+      if (!result) {
+        statsResponse = statsResponse || await fetchFromSocialKitStats(url);
+        result = statsResponse.result;
+        providerUnavailable = providerUnavailable || statsResponse.temporarilyUnavailable;
+        providerError = providerError || statsResponse.providerError === true;
+        retryAfterSeconds = retryAfterSeconds || statsResponse.retryAfterSeconds || null;
+        unsupportedCarousel = statsResponse.unsupportedCarousel === true;
+      }
+
+      if (!result && unsupportedCarousel) {
         const carouselResponse = await fetchCarouselFromSocialKit(
           statsResponse.username,
           shortcode
